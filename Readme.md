@@ -7,9 +7,9 @@
     * `make venv` create python virtual environment-
     * `make install` this will build the extension and install
 
-## un-install
+## uninstall
 
-un-install extension `make uninstall`
+To uninstall the extension run `make uninstall`
 
 ## Help 
 
@@ -51,5 +51,5 @@ TODO
 * HTTP get resource in jinja2
 * Check if a deployment is running and connect instead of redeploying or deleting
 * Tests :)
-* implement test handler and test lifecycle
-* support terraform
+* Implement test handler and test lifecycle
+* Support terraform
