@@ -3,15 +3,15 @@ VENV := venv
 #
 EXTENTION_NAME := cdf
 # default target, when make executed without arguments
-all: venv
+all: source-venv
 
-venv: $(VENV)/bin/activate
+source-venv: $(VENV)/bin/activate
 
-install-venv:
+venv:
 	python3 -m venv $(VENV)
 	pip3 install -r dev-requirements.txt
 
-build: venv clean
+build: source-venv clean
 	python3 setup.py bdist_wheel
 
 uninstall: 
@@ -32,4 +32,4 @@ clean-all: clean
 	find . -name '*.pyo' -exec rm -f {} +
 	find . -name '*~' -exec rm -f  {} +
 	   
-.PHONY: all venv clean
+.PHONY: all source-venv
