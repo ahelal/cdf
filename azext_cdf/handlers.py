@@ -9,9 +9,10 @@ from azure.cli.command_modules.resource.custom import build_bicep_file, run_bice
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
 from azext_cdf.parser import ConfigParser, CONFIG_UP, CONFIG_RG, CONFIG_PARAMS, CONFIG_NAME, CONFIG_LOCATION, CONFIG_TMP, RUNTIME_CONFIG_DIR_KEY
+from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.VERSION import VERSION
 from azext_cdf.utils import json_write_to_file, find_the_right_file, dir_change_working, json_load, file_read_content, file_exits
-from azext_cdf.hooks import run_hook
+from azext_cdf.hooks import run_hook, run_hook_lifecycle
 from azext_cdf.state import State
 from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_TESTED, STATE_PHASE_TESTING, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
 from azext_cdf.state import STATE_STATUS_UNKNOWN, STATE_STATUS_SUCCESS, STATE_STATUS_ERROR, STATE_STATUS_FAILED, STATE_STATUS_PENDING
@@ -136,6 +137,7 @@ def _check_deployment_error(cmd, resource_group_name, deployment_name, type):
 def down_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, working_dir=None):
     cp, state = _init_config(config, rtmp, working_dir)
     state.transitionToPhase(STATE_PHASE_GOING_DOWN)
+    run_hook_lifecycle(cp, state, LIFECYCLE_PRE_DOWN)
     try:
         if cp.provisioner == 'bicep':
             _down_bicep(cmd, cp)
@@ -148,7 +150,7 @@ def down_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, working_dir=None):
     state.setResult(outputs=outputs, resources=output_resources, flush=True)
     # cp.updateResult(outputs={}, resources={})
     state.completedPhase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
-    
+    run_hook_lifecycle(cp, state, LIFECYCLE_POST_DOWN)
 
 def _down_bicep(cmd, cp):
     #TODO check deployment exisits before doing an empty deployment
@@ -173,6 +175,7 @@ def _down_bicep(cmd, cp):
 def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir=None):
     cp, state = _init_config(config, rtmp, working_dir)
     state.transitionToPhase(STATE_PHASE_GOING_UP)
+    run_hook_lifecycle(cp, state, LIFECYCLE_PRE_UP)
     try:
         if cp.provisioner == 'bicep':
             output_resources, outputs= run_bicep(cmd, 
@@ -194,4 +197,5 @@ def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir
 
     state.setResult(outputs=outputs, resources=output_resources, flush=True)
     state.completedPhase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
+    run_hook_lifecycle(cp, state, LIFECYCLE_POST_UP)
     # cp.updateResult(outputs=outputs, resources=output_resources)

@@ -1,5 +1,7 @@
 import yaml
 import os
+import platform
+
 from knack.util import CLIError
 from schema import Schema, And,Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction
@@ -15,11 +17,11 @@ RUNTIME_CDF_VERSION_KEY = 'CDF_VERSION'
 RUNTIME_CDF_TMP_DIR_KEY = 'CDF_TMP_DIR'
 RUNTIME_CONFIG_DIR_KEY = 'CONFIG_DIR'
 RUNTIME_CONFIG_RESOURCE_GROUP = 'CONFIG_RESOURCE_GROUP'
+RUNTIME_PLATFORM = 'PLATFORM'
 RUNTIME_RESULT = 'result'
 RUNTIME_RESULT_OUTPUTS = 'outputs'
 RUNTIME_RESULT_RESOURCES = 'resources'
 RUNTIME_HOOKS= 'hooks'
-
 # Config
 CONFIG_NAME = 'name'
 CONFIG_RG = 'resource_group'
@@ -34,7 +36,9 @@ CONFIG_PARAMS = 'params'
 CONFIG_STATE_FILE = 'state'
 CONFIG_HOOKS = 'hooks'
 CONFIG_STATE_FILE_DEFAULT = '{{' + RUNTIME_CDF_TMP_DIR_KEY + '}}/state.json'
-CONFIG_SUPPORTED_LIFECYCLE = ("pre-up","post-up","pre-down","post-down", "pre-test","post-test", "")
+LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL  = "pre-up", "post-up", "pre-down","post-down", "pre-test","post-test", ""
+CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
+CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
 CONFIG_SUPPORTED_TYPES = ('az', 'cmd', "print", "call") #('bicep', 'arm',  'api', 'rest', "terraform")
 
 # @contextfunction                                                                                                                                                                                         
@@ -55,6 +59,7 @@ class ConfigParser:
                                     Optional("name"):  str,
                                     Optional("description"): str,
                                     Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_TYPES),
+                                    Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
                                     "args": Or(str,list),
                                 }],
                                 Optional("lifecycle", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_LIFECYCLE)),
@@ -118,6 +123,7 @@ class ConfigParser:
             RUNTIME_CDF_VERSION_KEY: VERSION,
             RUNTIME_CONFIG_DIR_KEY: real_dirname(self._config),
             RUNTIME_ENV_KEY: os.environ,
+            RUNTIME_PLATFORM: platform.system().lower(),
             CONFIG_VARS: {},
             CONFIG_PARAMS: {},
         }
@@ -250,3 +256,7 @@ class ConfigParser:
     @property
     def state_file(self):
         return self.data[CONFIG_STATE_FILE]
+    
+    @property
+    def platform(self):
+        return self.firstPhaseVars[RUNTIME_PLATFORM]

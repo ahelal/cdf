@@ -1,11 +1,17 @@
 from knack.util import CLIError
-from azext_cdf.utils import json_load
+from azext_cdf.utils import json_load, is_equal_or_in
 from knack.log import get_logger
 from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE
 from azext_cdf.provisioner import run_command
 
 logger = get_logger(__name__)
 RECURSION_LIMIT = 5
+
+def run_hook_lifecycle(cp, state, event):
+    for hook in cp.data[CONFIG_HOOKS]:
+        if is_equal_or_in(event, cp.data[CONFIG_HOOKS][hook]["lifecycle"]):
+            run_hook(cp, state, [hook])
+
 def run_hook(cp, state, hook_args, recursion_n=1):
     hook_name = hook_args[0]
     if recursion_n > RECURSION_LIMIT:
@@ -22,6 +28,14 @@ def run_hook(cp, state, hook_args, recursion_n=1):
     for op in hook['ops']:
         n += 1
         ops_name = op.get("name", op.get("descrpition", f"#{n}"))
+        if is_equal_or_in("",  op['platform']):
+            pass # all platforms
+        elif is_equal_or_in(cp.platform,  op['platform']):
+            pass # my platfrom
+        else:
+            # Skip 
+            continue
+
         op_args = cp.interpolate(phase=SECOND_PHASE, 
                                         template=op['args'], 
                                         context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")

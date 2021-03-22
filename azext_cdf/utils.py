@@ -103,6 +103,14 @@ def read_param_file(filepath):
     except:
         raise CLIError(f"Failed to read parameter file '{filepath}'. Error: Parameter file is not 'json', 'yaml' or key value")
 
+def is_equal_or_in(value1, value2):
+    """Return a boolean. value1 is equal or in value2"""
+
+    if isinstance(value2, list):
+        return value1 in value2 
+    elif isinstance(value2, str):
+        return value1 == value2
+
 def is_part_of(item, valid_list):
     if isinstance(item, list):
         return set(item) <= set(valid_list)
