@@ -9,10 +9,14 @@ RECURSION_LIMIT = 5
 def run_hook(cp, state, hook_args, recursion_n=1):
     hook_name = hook_args[0]
     if recursion_n > RECURSION_LIMIT:
-        raise CLIError(f"Call recursion limit reached {recursion_n}")
+        raise CLIError(f"Call recursion limit reached {recursion_n - 1}")
         
     logger.info(f"Entering hook {hook_name} and hook_args {hook_args}")
-    hook = cp.data[CONFIG_HOOKS][hook_name]
+    try:
+        hook = cp.data[CONFIG_HOOKS][hook_name]
+    except KeyError as e:
+        raise CLIError(f"Unknown hook name '{hook_name}'.\n{str(e)} ")
+
     n = 0
     ops = {}
     for op in hook['ops']:
@@ -28,7 +32,6 @@ def run_hook(cp, state, hook_args, recursion_n=1):
         elif op['type'] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args, hook_args[1:])
         elif op['type'] == "call":
-            print("---> calling ", hook_name, op_args)
             run_hook(cp, state, [op_args], recursion_n +1)
             stdout, stderr = "", ""
 
