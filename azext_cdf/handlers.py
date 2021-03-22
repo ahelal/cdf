@@ -4,10 +4,12 @@ import sys
 
 from knack.util import CLIError
 from knack.log import get_logger
-from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, get_deployment_at_resource_group
+from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, get_deployment_at_resource_group, delete_resource
 from azure.cli.command_modules.resource.custom import build_bicep_file, run_bicep_command
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
+from azure.cli.core.commands.client_factory import get_subscription_id
+from azure.cli.core.commands.parameters import resource_group_name_type
 from azext_cdf.parser import ConfigParser, CONFIG_UP, CONFIG_RG, CONFIG_PARAMS, CONFIG_NAME, CONFIG_LOCATION, CONFIG_TMP, RUNTIME_CONFIG_DIR_KEY
 from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.VERSION import VERSION
@@ -17,6 +19,7 @@ from azext_cdf.state import State
 from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_TESTED, STATE_PHASE_TESTING, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
 from azext_cdf.state import STATE_STATUS_UNKNOWN, STATE_STATUS_SUCCESS, STATE_STATUS_ERROR, STATE_STATUS_FAILED, STATE_STATUS_PENDING
 from azext_cdf.provisioner import run_bicep
+
 from collections import OrderedDict
 logger = get_logger(__name__)
 
@@ -147,8 +150,15 @@ def down_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, working_dir=None):
     except Exception as e:
         state.addEvent(f"General error during diwb phase: {str(e)}", STATE_STATUS_ERROR)
         raise
-    state.setResult(outputs=outputs, resources=output_resources, flush=True)
-    # cp.updateResult(outputs={}, resources={})
+    
+    try:
+        if cp.managed_resource:
+            delete_resource(cmd, resource_ids=[f"/subscriptions/{get_subscription_id(cmd.cli_ctx)}/resourceGroups/{cp.resource_group_name}"])
+    except Exception as e:
+        if not "failed to be deleted" in str(e):
+            raise e
+
+    state.setResult(outputs={}, resources={}, flush=True)
     state.completedPhase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
     run_hook_lifecycle(cp, state, LIFECYCLE_POST_DOWN)
 
@@ -163,15 +173,19 @@ def _down_bicep(cmd, cp):
         "outputs": {}
     }
     json_write_to_file(f"{cp.tmp_dir}/empty_deployment.json", empty_deployment)
-    deployment = deploy_arm_template_at_resource_group(cmd, 
+    try:
+        deployment = deploy_arm_template_at_resource_group(cmd, 
                                                        resource_group_name=cp.resource_group_name, 
                                                        template_file=f"{cp.tmp_dir}/empty_deployment.json", 
                                                        deployment_name=cp.data[CONFIG_NAME],
                                                        mode="Complete",
-                                                        no_wait=False)
-
-    #TODO: remove deployment and remote resource 
-
+                                                       no_wait=False)
+    except CLIError as e:
+        if "ResourceGroupNotFound" in str(e):
+            pass
+        else:
+            raise CLIError(e)
+    
 def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir=None):
     cp, state = _init_config(config, rtmp, working_dir)
     state.transitionToPhase(STATE_PHASE_GOING_UP)
@@ -185,7 +199,7 @@ def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir
                         resource_group=cp.resource_group_name, 
                         location=cp.location, 
                         params=cp.data[CONFIG_PARAMS],
-                        manage_resource_group=True,
+                        manage_resource_group=cp.managed_resource,
                         no_prompt=False)
 
     except CLIError as e:

@@ -25,6 +25,7 @@ RUNTIME_HOOKS= 'hooks'
 # Config
 CONFIG_NAME = 'name'
 CONFIG_RG = 'resource_group'
+CONFIG_RG_MANAGED = 'manage_resource_group'
 CONFIG_LOCATION = 'location'
 CONFIG_SUPPORTED_PROVISIONERS = ('bicep') #('bicep', 'terraform')
 CONFIG_PROVISIONER = 'provisioner'
@@ -71,6 +72,7 @@ class ConfigParser:
                             CONFIG_RG: And(str, len),
                             CONFIG_LOCATION: And(str, len),
                             Optional(CONFIG_SCOPE, default='resource_group'): And(str, len),
+                            Optional(CONFIG_RG_MANAGED, default=True): bool,
                             Optional(CONFIG_PROVISIONER, default='bicep'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
                             Optional(CONFIG_UP, default=None): And(str, len),
                             Optional(CONFIG_TMP, default='{{CONFIG_DIR}}/.cdf_tmp'): And(str, len),
@@ -200,6 +202,9 @@ class ConfigParser:
     @property
     def resource_group_name(self):
         return self.data[CONFIG_RG]
+    @property
+    def managed_resource(self):
+        return self.data[CONFIG_RG_MANAGED]
 
     @property
     def location(self):
