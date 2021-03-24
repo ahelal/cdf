@@ -200,7 +200,8 @@ def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir
                         location=cp.location, 
                         params=cp.data[CONFIG_PARAMS],
                         manage_resource_group=cp.managed_resource,
-                        no_prompt=False)
+                        no_prompt=False,
+                        complete_deployment=cp.deployment_mode)
 
     except CLIError as e:
         state.addEvent(f"Errored during up phase: {str(e)}", STATE_STATUS_ERROR)

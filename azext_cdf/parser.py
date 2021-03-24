@@ -36,6 +36,7 @@ CONFIG_VARS = 'vars'
 CONFIG_PARAMS = 'params'
 CONFIG_STATE_FILE = 'state'
 CONFIG_HOOKS = 'hooks'
+CONFIG_DEPLOYMENT_COMPLETE = 'complete_deployment'
 CONFIG_STATE_FILE_DEFAULT = '{{' + RUNTIME_CDF_TMP_DIR_KEY + '}}/state.json'
 LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL  = "pre-up", "post-up", "pre-down","post-down", "pre-test","post-test", ""
 CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
@@ -74,6 +75,7 @@ class ConfigParser:
                             Optional(CONFIG_SCOPE, default='resource_group'): And(str, len),
                             Optional(CONFIG_RG_MANAGED, default=True): bool,
                             Optional(CONFIG_PROVISIONER, default='bicep'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
+                            Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
                             Optional(CONFIG_UP, default=None): And(str, len),
                             Optional(CONFIG_TMP, default='{{CONFIG_DIR}}/.cdf_tmp'): And(str, len),
                             # Optional('vars_file', default=[]): Or(str,list),
@@ -275,3 +277,7 @@ class ConfigParser:
     @property
     def platform(self):
         return self.firstPhaseVars[RUNTIME_PLATFORM]
+
+    @property
+    def deployment_mode(self):
+        return self.data[CONFIG_DEPLOYMENT_COMPLETE]
