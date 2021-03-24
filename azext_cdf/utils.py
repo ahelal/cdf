@@ -56,6 +56,13 @@ def file_read_content(filepath):
     except OSError as e:
         raise CLIError(f"Failed to read file '{filepath}'. Error: {str(e)}")
 
+def file_write_content(filepath, content):
+    try:
+        with open(filepath, "w") as f:
+            f.write(content)
+    except OSError as e:
+        raise CLIError(f"Failed to write file '{filepath}'. Error: {str(e)}")
+
 def json_write_to_file(filepath, data):
     try:
         with open(filepath, 'w') as outfile:

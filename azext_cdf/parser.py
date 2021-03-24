@@ -41,7 +41,7 @@ CONFIG_STATE_FILE_DEFAULT = '{{' + RUNTIME_CDF_TMP_DIR_KEY + '}}/state.json'
 LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL  = "pre-up", "post-up", "pre-down","post-down", "pre-test","post-test", ""
 CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
 CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
-CONFIG_SUPPORTED_TYPES = ('az', 'cmd', "print", "call") #('bicep', 'arm',  'api', 'rest', "terraform")
+CONFIG_SUPPORTED_OPS_TYPES = ('az', 'cmd', "print", "call", "script") #('bicep', 'arm',  'api', 'rest', "terraform")
 
 def include_file(name):
     try:
@@ -72,7 +72,7 @@ class ConfigParser:
                                 "ops": [{
                                     Optional("name"):  str,
                                     Optional("description"): str,
-                                    Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_TYPES),
+                                    Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
                                     Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
                                     "args": Or(str,list),
                                 }],
@@ -228,6 +228,7 @@ class ConfigParser:
     @property
     def resource_group_name(self):
         return self.data[CONFIG_RG]
+
     @property
     def managed_resource(self):
         return self.data[CONFIG_RG_MANAGED]

@@ -1,8 +1,10 @@
 from knack.util import CLIError
-from azext_cdf.utils import json_load, is_equal_or_in
+from azext_cdf.utils import json_load, is_equal_or_in, file_read_content, file_write_content
 from knack.log import get_logger
 from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE
 from azext_cdf.provisioner import run_command
+import os
+import stat
 
 logger = get_logger(__name__)
 RECURSION_LIMIT = 5
@@ -43,6 +45,8 @@ def run_hook(cp, state, hook_args, recursion_n=1):
             stdout, stderr = _run_az(hook_name, ops_name, op_args, hook_args[1:])
         elif op['type'] == "cmd":
             stdout, stderr = _run_cmd(hook_name, ops_name, op_args, hook_args[1:])
+        elif op['type'] == "script":
+            stdout, stderr = _run_script(hook_name, ops_name, op_args, hook_args[1:], cp)
         elif op['type'] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args, hook_args[1:])
         elif op['type'] == "call":
@@ -77,3 +81,16 @@ def _run_az(hook_name, ops_name, op_args, hook_args):
     stdout = json_load(stdout)
     return stdout, stder
     # logger.info(f"Running op {op['name']}")
+
+def _run_script(hook_name, ops_name, op_args, hook_args, cp):
+    if isinstance(op_args, str):
+        op_args = op_args.split(" ")
+    filename = op_args[0]
+    target_file = f"{cp.tmp_dir}/{os.path.basename(filename)}"
+    content = file_read_content(op_args[0])
+    content = cp.interpolate(SECOND_PHASE,content, f"Interplating script op {op_args[0]}")
+    file_write_content(target_file, content)
+    # os.chmod(target_file, stat.st_mode | stat.S_IEXEC) # make file exec
+    os.chmod(target_file, stat.S_IRUSR | stat.S_IEXEC | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH) # make file exec
+    op_args[0] = target_file
+    return _run_cmd(hook_name, ops_name, op_args, hook_args)
