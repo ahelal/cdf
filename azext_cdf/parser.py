@@ -4,7 +4,7 @@ import platform
 
 from knack.util import CLIError
 from schema import Schema, And,Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
-from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction
+from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction,Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError
 from azext_cdf.VERSION import VERSION
 from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname
@@ -43,10 +43,22 @@ CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE
 CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
 CONFIG_SUPPORTED_TYPES = ('az', 'cmd', "print", "call") #('bicep', 'arm',  'api', 'rest', "terraform")
 
-# @contextfunction                                                                                                                                                                                         
-# def content(ctx, name):                                                                                                                                                                                   
-#     env = ctx.environment                                                                                                                                                                                      
-#     return jinja2.Markup(env.loader.get_source(env, name)[0])    
+def include_file(name):
+    try:
+        with open(name) as f:
+            return f.read()
+    except Exception as e:
+        raise CLIError(f"include_file filter argument '{name}' error. {str(e)}")
+
+@contextfunction
+def template_file(ctx, name):
+    try:
+        data = include_file(name)
+        return Template(data).render(ctx)
+        
+    except Exception as e:
+        raise CLIError(f"template_file filter argument '{name}' error. {str(e)}")
+    return data
 
 class ConfigParser:
     def __init__(self, config, rtmp=False):
@@ -86,7 +98,9 @@ class ConfigParser:
                            }
         self._loadandValidateConf()
         self.jEnv = Environment(loader=BaseLoader,undefined=StrictUndefined)
-        # self.jEnv.globals['content'] = content
+        self.jEnv.globals['include_file'] = include_file
+        self.jEnv.globals['template_file'] = template_file
+        # self.jEnv.filters["include_file"] = include_file
         # first phase
         self._setupFirstPhaseVariables()
         self._setupFirstPhaseInterpolation()
