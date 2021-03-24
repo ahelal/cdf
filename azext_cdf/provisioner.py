@@ -16,7 +16,6 @@ def run_command(bin, args=[]):
     except subprocess.CalledProcessError:
         raise CLIError(process.stderr.decode("utf-8"))
 
-# def _run_bicep(cmd, cp, no_prompt):
 def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, location, params={} , manage_resource_group=True, no_prompt=False):
     arm_template_file = f"{tmp_dir}/targetfile.json"
     logger.debug(f' Building bicep file in tmp dir {arm_template_file}')
@@ -31,7 +30,7 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, locatio
                             manage_resource_group=manage_resource_group, 
                             no_prompt=no_prompt)
 
-def run_arm_deployment(cmd, deployment_name, arm_template_file, tmp_dir,  resource_group, location, params={} , manage_resource_group=True, no_prompt=False):
+def run_arm_deployment(cmd, deployment_name, arm_template_file, tmp_dir, resource_group, location, params={} , manage_resource_group=True, no_prompt=False):
     if manage_resource_group:
         create_resource_group(cmd, rg_name=resource_group, location=location)
     parameters = []

@@ -166,30 +166,40 @@ class ConfigParser:
         if template is None:
             return None
         if phase == FIRST_PHASE:
-            vars = self.firstPhaseVars
+            variables = self.firstPhaseVars
         elif phase == SECOND_PHASE:
-            vars = {**self.secondPhaseVars, **self.firstPhaseVars}
+            variables = {**self.secondPhaseVars, **self.firstPhaseVars}
 
         if extra_vars:
-            vars = {**vars, **extra_vars}
+            variables = {**vars, **extra_vars}
 
         if context:
             error_context = f"in phase: '{phase}'', Context: '{context}'"
         else:
             error_context = f"in phase '{phase}'"
-        
+
+        return self._interpolate_object(phase, template, error_context, variables)
+
+    def _interpolate_object(self, phase, template, context=None, variables={}):
         if isinstance(template, str):
-            return self._intrerpolate_string(template, vars, error_context)
+            return self._intrerpolate_string(template, context, variables)
         elif isinstance(template, list):
             interpolated_list = []
-            for template_str in template:
-                interpolated_list.append(self._intrerpolate_string(template_str, vars, error_context))
+            for template_item in template:
+                interpolated_list.append(self._interpolate_object(phase, template_item, context, variables))
             return interpolated_list
+        elif isinstance(template, dict):
+            interpolated_dict = {}
+            for template_key, template_value in template.items():
+                interpolated_dict.update({template_key: self._interpolate_object(phase, template_value, context, variables)})
+            return interpolated_dict
 
-    def _intrerpolate_string(self,string, vars, error_context):
+    def _intrerpolate_string(self, string, error_context, variables):
         try:
             template_string = self.jEnv.from_string(string)
-            return template_string.render(vars)
+            return template_string.render(variables)
+        # except TypeError as e:
+        #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
         except UndefinedError as e:
             raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
         except TemplateSyntaxError as e:
