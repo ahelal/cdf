@@ -8,13 +8,22 @@ from azure.cli.command_modules.resource.custom import deploy_arm_template_at_res
 
 logger = get_logger(__name__)
 
-def run_command(bin, args=[]):
-    process = subprocess.run([rf"{bin}"] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def run_command(bin, args=[], interactive=False):
+
     try:
-        process.check_returncode()
-        return process.stdout.decode("utf-8"), process.stderr.decode("utf-8")
-    except subprocess.CalledProcessError:
-        raise CLIError(process.stderr.decode("utf-8"))
+        cmd_args = [rf"{bin}"] + args
+        if interactive:
+            subprocess.check_call(cmd_args)
+            return "", ""
+        else:
+            process = subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process.check_returncode()
+            return process.stdout.decode("utf-8"), process.stderr.decode("utf-8")
+    except subprocess.CalledProcessError as e:
+        context = f'Run command error. {str(e)}'
+        if 'process' in locals():
+            ccontext = f"{context}\n{process.stderr.decode('utf-8')}"
+        raise CLIError(context)
 
 def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, location, params={} , manage_resource_group=True, no_prompt=False, complete_deployment=False):
     arm_template_file = f"{tmp_dir}/targetfile.json"

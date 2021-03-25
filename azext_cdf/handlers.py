@@ -59,7 +59,8 @@ def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=[], working_dir=None, con
         user_confirmation(f"You want to run a hook when the phase is not up '{status['Phase']}'. Are you sure ?")
     elif not status['Status'] == STATE_STATUS_SUCCESS:
         user_confirmation(f"You want to run a hook when the last status is not success '{status['Phase']}'. Are you sure ?")
-
+    
+    cp.delayedVariableInterpolite()
     run_hook(cp, state, hook_args)
 
 def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None):
@@ -189,7 +190,10 @@ def _down_bicep(cmd, cp):
 def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir=None):
     cp, state = _init_config(config, rtmp, working_dir)
     state.transitionToPhase(STATE_PHASE_GOING_UP)
+    # Run pre up life cycle
     run_hook_lifecycle(cp, state, LIFECYCLE_PRE_UP)
+    # Run template interpolite
+    cp.preUpInterpolite()
     try:
         if cp.provisioner == 'bicep':
             output_resources, outputs= run_bicep(cmd, 

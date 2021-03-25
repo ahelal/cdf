@@ -5,6 +5,7 @@ from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE
 from azext_cdf.provisioner import run_command
 import os
 import stat
+import shlex
 
 logger = get_logger(__name__)
 RECURSION_LIMIT = 5
@@ -41,10 +42,11 @@ def run_hook(cp, state, hook_args, recursion_n=1):
         op_args = cp.interpolate(phase=SECOND_PHASE, 
                                         template=op['args'], 
                                         context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
+        interactive = op.get("interactive", False)
         if op['type'] == "az":
             stdout, stderr = _run_az(hook_name, ops_name, op_args, hook_args[1:])
         elif op['type'] == "cmd":
-            stdout, stderr = _run_cmd(hook_name, ops_name, op_args, hook_args[1:])
+            stdout, stderr = _run_cmd(hook_name, ops_name, op_args, hook_args[1:], interactive)
         elif op['type'] == "script":
             stdout, stderr = _run_script(hook_name, ops_name, op_args, hook_args[1:], cp)
         elif op['type'] == "print":
@@ -62,29 +64,29 @@ def _run_print(hook_name, ops_name, op_args, hook_args):
     print(stdout)
     return stdout, ""
 
-def _run_cmd(hook_name, ops_name, op_args, hook_args):
+def _run_cmd(hook_name, ops_name, op_args, hook_args, interactive=False):
     if isinstance(op_args, str):
-        op_args = op_args.split(" ")
+        op_args = shlex.split(op_args)
     try:
-        stdout, stder = run_command(op_args[0], op_args[1:])
+        stdout, stder = run_command(op_args[0], op_args[1:], interactive=interactive)
     except Exception as e:
         raise CLIError(f"Failed during cmd execution in op '{ops_name}' in hook '{hook_name}'.\n{str(e)} ")
     return stdout, stder
 
 def _run_az(hook_name, ops_name, op_args, hook_args):
     if isinstance(op_args, str):
-        op_args = op_args.split(" ")
+        op_args = shlex.split(op_args)
     try:
         stdout, stder = run_command("az", op_args)
     except Exception as e:
         raise CLIError(f"Failed during AZ execution in op '{ops_name}' in hook '{hook_name}'.\n{str(e)} ")
-    stdout = json_load(stdout)
+    # stdout = json_load(stdout)
     return stdout, stder
     # logger.info(f"Running op {op['name']}")
 
 def _run_script(hook_name, ops_name, op_args, hook_args, cp):
     if isinstance(op_args, str):
-        op_args = op_args.split(" ")
+        op_args = shlex.split(op_args)
     filename = op_args[0]
     target_file = f"{cp.tmp_dir}/{os.path.basename(filename)}"
     content = file_read_content(op_args[0])

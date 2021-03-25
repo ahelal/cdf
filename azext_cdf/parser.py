@@ -54,7 +54,7 @@ def include_file(name):
 def template_file(ctx, name):
     try:
         data = include_file(name)
-        return Template(data).render(ctx)
+        return Template(data, undefined=StrictUndefined).render(ctx)
         
     except Exception as e:
         raise CLIError(f"template_file filter argument '{name}' error. {str(e)}")
@@ -74,6 +74,7 @@ class ConfigParser:
                                     Optional("description"): str,
                                     Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
                                     Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
+                                    Optional("interactive", default=False): bool,
                                     "args": Or(str,list),
                                 }],
                                 Optional("lifecycle", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_LIFECYCLE)),
@@ -97,22 +98,15 @@ class ConfigParser:
                             Optional(CONFIG_STATE_FILE, default=CONFIG_STATE_FILE_DEFAULT) : str ,
                            }
         self._loadandValidateConf()
-        self.jEnv = Environment(loader=BaseLoader,undefined=StrictUndefined)
+        self.jEnv = Environment(loader=BaseLoader, undefined=StrictUndefined)
         self.jEnv.globals['include_file'] = include_file
         self.jEnv.globals['template_file'] = template_file
-        # self.jEnv.filters["include_file"] = include_file
-        # first phase
+        self._delayed_vars = []
+        # First phase
         self._setupFirstPhaseVariables()
         self._setupFirstPhaseInterpolation()
-        #seconf phase
-        self._setupSecondPhaseVariables() 
-
-    def updateHooksResult(self, hooks_output):
-        self.secondPhaseVars[RUNTIME_HOOKS] = hooks_output
-
-    def updateResult(self, result):
-        self.secondPhaseVars[RUNTIME_RESULT] = result
-
+        # Second phase
+        self._setupSecondPhaseVariables()
 
     def _loadandValidateConf(self):
         self.data = self._readConfig(self._config)
@@ -146,10 +140,14 @@ class ConfigParser:
             CONFIG_PARAMS: {},
         }
         if CONFIG_VARS in self.data:
-            for v, k in self.data[CONFIG_VARS].items():
-                self.firstPhaseVars[CONFIG_VARS][v] = self.interpolate(FIRST_PHASE, k, f"variables in config '{v}':'{k}'")
-            # cosmetics change the vars in data not really needed
-            self.data[CONFIG_VARS] = self.firstPhaseVars[CONFIG_VARS]
+            for k, v in self.data[CONFIG_VARS].items():
+                try:
+                    self.firstPhaseVars[CONFIG_VARS][k] = self.interpolate(FIRST_PHASE, v, f"variables in config '{k}':'{v}'")
+                except CLIError as e:
+                    if 'result' in str(e):
+                        self._delayed_vars.append(k)
+                    else:
+                        raise
 
     def _setupFirstPhaseInterpolation(self):
         self.data[CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP])
@@ -165,10 +163,7 @@ class ConfigParser:
         self.data[CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION])
         self.data[CONFIG_SCOPE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_SCOPE])
         self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP])
-        if CONFIG_PARAMS in self.data:
-            for v,k in self.data[CONFIG_PARAMS].items():
-                self.data[CONFIG_PARAMS][v] = self.interpolate(FIRST_PHASE, k)
-    
+
     def _setupSecondPhaseVariables(self):
         self.secondPhaseVars = {
                 RUNTIME_RESULT: {
@@ -177,6 +172,47 @@ class ConfigParser:
                 },
                 RUNTIME_HOOKS: self.hooks_ops
         }
+
+    def _interpolate_object(self, phase, template, context=None, variables={}):
+        if isinstance(template, str):
+            return self._intrerpolate_string(template, context, variables)
+        elif isinstance(template, list):
+            interpolated_list = []
+            for template_item in template:
+                interpolated_list.append(self._interpolate_object(phase, template_item, context, variables))
+            return interpolated_list
+        elif isinstance(template, dict):
+            interpolated_dict = {}
+            for template_key, template_value in template.items():
+                interpolated_dict.update({template_key: self._interpolate_object(phase, template_value, context, variables)})
+            return interpolated_dict
+
+    def _intrerpolate_string(self, string, error_context, variables,):
+        try:
+            template_string = self.jEnv.from_string(string)
+            return template_string.render(variables)
+        # except TypeError as e:
+        #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
+        except UndefinedError as e:
+                raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
+        except TemplateSyntaxError as e:
+            raise CLIError(f"config interpolation error. {error_context}, template syntax : {str(e)}")
+
+    def updateHooksResult(self, hooks_output):
+        self.secondPhaseVars[RUNTIME_HOOKS] = hooks_output
+
+    def updateResult(self, result):
+        self.secondPhaseVars[RUNTIME_RESULT] = result
+
+    def delayedVariableInterpolite(self):
+        for k in self._delayed_vars:
+            self.firstPhaseVars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in preUpInterpolite '{k}'")
+
+    def preUpInterpolite(self):
+        self.delayedVariableInterpolite()
+        if CONFIG_PARAMS in self.data:
+            for v,k in self.data[CONFIG_PARAMS].items():
+                self.data[CONFIG_PARAMS][v] = self.interpolate(FIRST_PHASE, k, f"variables in config in preUpInterpolite '{k}'")
 
     def interpolate(self, phase, template, context=None, extra_vars={}):
         if template is None:
@@ -195,31 +231,6 @@ class ConfigParser:
             error_context = f"in phase '{phase}'"
 
         return self._interpolate_object(phase, template, error_context, variables)
-
-    def _interpolate_object(self, phase, template, context=None, variables={}):
-        if isinstance(template, str):
-            return self._intrerpolate_string(template, context, variables)
-        elif isinstance(template, list):
-            interpolated_list = []
-            for template_item in template:
-                interpolated_list.append(self._interpolate_object(phase, template_item, context, variables))
-            return interpolated_list
-        elif isinstance(template, dict):
-            interpolated_dict = {}
-            for template_key, template_value in template.items():
-                interpolated_dict.update({template_key: self._interpolate_object(phase, template_value, context, variables)})
-            return interpolated_dict
-
-    def _intrerpolate_string(self, string, error_context, variables):
-        try:
-            template_string = self.jEnv.from_string(string)
-            return template_string.render(variables)
-        # except TypeError as e:
-        #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
-        except UndefinedError as e:
-            raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
-        except TemplateSyntaxError as e:
-            raise CLIError(f"config interpolation error. {error_context}, template syntax : {str(e)}")
 
     @property
     def name(self):
