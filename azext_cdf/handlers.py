@@ -10,7 +10,7 @@ from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
 from azure.cli.core.commands.client_factory import get_subscription_id
 from azure.cli.core.commands.parameters import resource_group_name_type
-from azext_cdf.parser import ConfigParser, CONFIG_UP, CONFIG_RG, CONFIG_PARAMS, CONFIG_NAME, CONFIG_LOCATION, CONFIG_TMP, RUNTIME_CONFIG_DIR_KEY
+from azext_cdf.parser import ConfigParser, CONFIG_PARAMS
 from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.VERSION import VERSION
 from azext_cdf.utils import json_write_to_file, find_the_right_file, dir_change_working, json_load, file_read_content, file_exits
@@ -178,7 +178,7 @@ def _down_bicep(cmd, cp):
         deployment = deploy_arm_template_at_resource_group(cmd, 
                                                        resource_group_name=cp.resource_group_name, 
                                                        template_file=f"{cp.tmp_dir}/empty_deployment.json", 
-                                                       deployment_name=cp.data[CONFIG_NAME],
+                                                       deployment_name=cp.name,
                                                        mode="Complete",
                                                        no_wait=False)
     except CLIError as e:
@@ -197,8 +197,8 @@ def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir
     try:
         if cp.provisioner == 'bicep':
             output_resources, outputs= run_bicep(cmd, 
-                        deployment_name=cp.data[CONFIG_NAME],
-                        bicep_file= find_the_right_file(cp.up_file, 'bicep', '*.bicep', cp.firstPhaseVars[RUNTIME_CONFIG_DIR_KEY]), 
+                        deployment_name=cp.name,
+                        bicep_file= find_the_right_file(cp.up_file, 'bicep', '*.bicep', cp.config_dir),
                         tmp_dir=cp.tmp_dir,
                         resource_group=cp.resource_group_name, 
                         location=cp.location, 

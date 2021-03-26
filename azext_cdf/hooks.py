@@ -17,6 +17,17 @@ def run_hook_lifecycle(cp, state, event):
 
 def run_hook(cp, state, hook_args, recursion_n=1):
     hook_name = hook_args[0]
+    state.addEvent(f"Running hook. hook args '{hook_args[1:]}'", hook=hook_name, flush=True)
+    try:
+        _run_hook(cp, state, hook_args, recursion_n=1)
+    except CLIError as e:
+        state.addEvent(f"Error during hook execution {str(e)}", hook=hook_name, flush=True)
+        raise
+
+    state.addEvent(f"Finished running hook", hook=hook_name, flush=True)
+
+def _run_hook(cp, state, hook_args, recursion_n=1):
+    hook_name = hook_args[0]
     if recursion_n > RECURSION_LIMIT:
         raise CLIError(f"Call recursion limit reached {recursion_n - 1}")
         
@@ -52,7 +63,7 @@ def run_hook(cp, state, hook_args, recursion_n=1):
         elif op['type'] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args, hook_args[1:])
         elif op['type'] == "call":
-            run_hook(cp, state, [op_args], recursion_n +1)
+            _run_hook(cp, state, [op_args], recursion_n +1)
             stdout, stderr = "", ""
 
         if op.get("name", False):
