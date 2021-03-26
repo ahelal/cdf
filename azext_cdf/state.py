@@ -1,7 +1,10 @@
+import semver
 from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load
+from azext_cdf.VERSION import VERSION
 from datetime import datetime
 from knack.util import CLIError
 from copy import deepcopy
+from knack.log import get_logger
 
 STATE_PHASE_UNKNOWN = "unknown"
 STATE_PHASE_GOING_UP = "transitioning_up"
@@ -28,6 +31,8 @@ STATE_UP_RESULT_OUTPUTS = "outputs"
 STATE_UP_RESULT_RESOURCES = "resources"
 STATE_HOOKS_RESULT = "hooks"
 
+logger = get_logger(__name__)
+
 class State(object):
     def __init__(self, state_file, name, config_hooks):
         self.state_file = state_file
@@ -39,6 +44,7 @@ class State(object):
                 STATE_LASTUPDATE: self.timestamp(),
                 STATE_STATUS: -1,
                 STATE_EVENTS: [],
+                "version": VERSION,
                 STATE_HOOKS_RESULT: {},
                 STATE_UP_RESULT: {
                     STATE_UP_RESULT_OUTPUTS: {},
@@ -55,10 +61,23 @@ class State(object):
             self.state_db = json_load(state_str)
         except CLIError as e:
             raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(e)}")
+
         if not self.state_db[STATE_DEPLOYMENT_NAME] == name:
             raise CLIError("state error seems you have changed the delpoyment name to '{}', the state has this deployment name: {}".format(self.state_db[STATE_DEPLOYMENT_NAME], name))
+        self._version_compare()
         self._setup_hooks_reference()
-    
+
+    def _version_compare(self):
+        state_version = self.state_db['version']
+        sem_ver_com = semver.compare(state_version, VERSION)
+        if sem_ver_com == -1: # state is less then cli
+            logger.warning(f'Your state file is out date: state version {state_version} CDF version {VERSION}. Run `up -r` to rewrite state')
+        elif sem_ver_com == 1: # state is more then cli
+            logger.warning(f'Your CDF extension is outdate: state version {state_version} CLI version {VERSION}. Updgrade extension')
+        elif sem_ver_com == 0: # state is less then cli
+            pass
+
+
     def _setup_hooks_reference(self):
         # hooks/ops in state db but not config_db
         current_state_db_hooks = deepcopy(self.state_db[STATE_HOOKS_RESULT])
@@ -93,10 +112,10 @@ class State(object):
         elif status == STATE_STATUS_FAILED:
             self.addEvent(f"Failed during {phase}. { msg }", status=STATE_STATUS_FAILED, flush=True)
 
-    def addEvent(self, msg, status=None, phase=None, flush=True):
+    def addEvent(self, msg, status=None, phase=None, hook=None, flush=True):
         if phase:
             self.state_db[STATE_PHASE] = phase
-        event = {"timestamp": self.timestamp(), "phase": self.state_db[STATE_PHASE], "msg": msg, "status": status}
+        event = {"timestamp": self.timestamp(), "phase": self.state_db[STATE_PHASE], "msg": msg, "status": status, "hook": hook}
         self.state_db[STATE_EVENTS].append(event)
         if status:
             self.state_db[STATE_STATUS] = len(self.state_db[STATE_EVENTS]) -1
@@ -129,6 +148,7 @@ class State(object):
                 "Timestamp": self.state_db[STATE_LASTUPDATE],
                 "Status": last_status_event["status"],
                 "StatusMessage": last_status_event["msg"],
+                "Version": self.state_db['version'],
             }
         return return_status
 
@@ -141,6 +161,7 @@ class State(object):
                     "Phase": event["phase"],
                     "Message": event["msg"],
                     "Status": event["status"],
+                    "Hook": event["hook"],
                 })
         return return_events
 

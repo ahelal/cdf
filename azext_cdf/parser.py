@@ -13,11 +13,11 @@ FIRST_PHASE = 1
 SECOND_PHASE = 2
 # Runtime vars
 RUNTIME_ENV_KEY = 'env'
-RUNTIME_CDF_VERSION_KEY = 'CDF_VERSION'
-RUNTIME_CDF_TMP_DIR_KEY = 'CDF_TMP_DIR'
-RUNTIME_CONFIG_DIR_KEY = 'CONFIG_DIR'
-RUNTIME_CONFIG_RESOURCE_GROUP = 'CONFIG_RESOURCE_GROUP'
-RUNTIME_PLATFORM = 'PLATFORM'
+# RUNTIME_CDF_VERSION_KEY = 'CDF_VERSION' # cdf.version
+# RUNTIME_CDF_TMP_DIR_KEY = 'CDF_TMP_DIR' # cdf.tmp_dir
+# RUNTIME_CONFIG_DIR_KEY = 'CONFIG_DIR' # cdf.tmp_dir
+# RUNTIME_CONFIG_RESOURCE_GROUP = 'CONFIG_RESOURCE_GROUP' # cdf.resource_group
+# RUNTIME_PLATFORM = 'PLATFORM' # cdf.platformp
 RUNTIME_RESULT = 'result'
 RUNTIME_RESULT_OUTPUTS = 'outputs'
 RUNTIME_RESULT_RESOURCES = 'resources'
@@ -37,7 +37,7 @@ CONFIG_PARAMS = 'params'
 CONFIG_STATE_FILE = 'state'
 CONFIG_HOOKS = 'hooks'
 CONFIG_DEPLOYMENT_COMPLETE = 'complete_deployment'
-CONFIG_STATE_FILE_DEFAULT = '{{' + RUNTIME_CDF_TMP_DIR_KEY + '}}/state.json'
+CONFIG_STATE_FILE_DEFAULT = '{{ cdf.tmp_dir }}/state.json'
 LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL  = "pre-up", "post-up", "pre-down","post-down", "pre-test","post-test", ""
 CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
 CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
@@ -90,7 +90,7 @@ class ConfigParser:
                             Optional(CONFIG_PROVISIONER, default='bicep'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
                             Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
                             Optional(CONFIG_UP, default=None): And(str, len),
-                            Optional(CONFIG_TMP, default='{{CONFIG_DIR}}/.cdf_tmp'): And(str, len),
+                            Optional(CONFIG_TMP, default='{{cdf.config_dir}}/.cdf_tmp'): And(str, len),
                             # Optional('vars_file', default=[]): Or(str,list),
                             Optional(CONFIG_VARS, default={}): dict,
                             Optional(CONFIG_PARAMS, default={}): dict,
@@ -132,10 +132,12 @@ class ConfigParser:
 
     def _setupFirstPhaseVariables(self):
         self.firstPhaseVars = {
-            RUNTIME_CDF_VERSION_KEY: VERSION,
-            RUNTIME_CONFIG_DIR_KEY: real_dirname(self._config),
+            "cdf":{
+                "version": VERSION,
+                "config_dir": real_dirname(self._config),
+                "platform": platform.system().lower(),
+            },
             RUNTIME_ENV_KEY: os.environ,
-            RUNTIME_PLATFORM: platform.system().lower(),
             CONFIG_VARS: {},
             CONFIG_PARAMS: {},
         }
@@ -150,19 +152,19 @@ class ConfigParser:
                         raise
 
     def _setupFirstPhaseInterpolation(self):
-        self.data[CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP])
-        self.firstPhaseVars[RUNTIME_CDF_TMP_DIR_KEY] = self.data[CONFIG_TMP]
+        self.data[CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], f"key {CONFIG_TMP}")
+        self.firstPhaseVars["cdf"]["tmp_dir"] = self.data[CONFIG_TMP]
         # remove and create tmp dir incase we will download some stuff for templates
         if self._rtmp:
             dir_remove(self.data[CONFIG_TMP])
         dir_create(self.data[CONFIG_TMP])
-        self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE])
-        self.data[CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME])
-        self.data[CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG])
-        self.firstPhaseVars[RUNTIME_CONFIG_RESOURCE_GROUP] = self.data[CONFIG_RG]
-        self.data[CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION])
-        self.data[CONFIG_SCOPE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_SCOPE])
-        self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP])
+        self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE], f"key {CONFIG_STATE_FILE}")
+        self.data[CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
+        self.data[CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
+        self.firstPhaseVars['cdf']['resource_group'] = self.data[CONFIG_RG]
+        self.data[CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
+        self.firstPhaseVars['cdf']['location'] = self.data[CONFIG_RG]
+        self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP], f"key {CONFIG_UP}")
 
     def _setupSecondPhaseVariables(self):
         self.secondPhaseVars = {
@@ -173,30 +175,23 @@ class ConfigParser:
                 RUNTIME_HOOKS: self.hooks_ops
         }
 
-    def _interpolate_object(self, phase, template, context=None, variables={}):
+    def _interpolate_object(self, phase, template,variables={}):
         if isinstance(template, str):
-            return self._intrerpolate_string(template, context, variables)
+            return self._intrerpolate_string(template, variables)
         elif isinstance(template, list):
             interpolated_list = []
             for template_item in template:
-                interpolated_list.append(self._interpolate_object(phase, template_item, context, variables))
+                interpolated_list.append(self._interpolate_object(phase, template_item, variables))
             return interpolated_list
         elif isinstance(template, dict):
             interpolated_dict = {}
             for template_key, template_value in template.items():
-                interpolated_dict.update({template_key: self._interpolate_object(phase, template_value, context, variables)})
+                interpolated_dict.update({template_key: self._interpolate_object(phase, template_value, variables)})
             return interpolated_dict
 
-    def _intrerpolate_string(self, string, error_context, variables,):
-        try:
-            template_string = self.jEnv.from_string(string)
-            return template_string.render(variables)
-        # except TypeError as e:
-        #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
-        except UndefinedError as e:
-                raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
-        except TemplateSyntaxError as e:
-            raise CLIError(f"config interpolation error. {error_context}, template syntax : {str(e)}")
+    def _intrerpolate_string(self, string, variables,):
+        template_string = self.jEnv.from_string(string)
+        return template_string.render(variables)
 
     def updateHooksResult(self, hooks_output):
         self.secondPhaseVars[RUNTIME_HOOKS] = hooks_output
@@ -230,7 +225,15 @@ class ConfigParser:
         else:
             error_context = f"in phase '{phase}'"
 
-        return self._interpolate_object(phase, template, error_context, variables)
+        try:
+            return self._interpolate_object(phase, template, variables)
+        # except TypeError as e:
+        #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
+        except UndefinedError as e:
+                raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
+        except TemplateSyntaxError as e:
+            raise CLIError(f"config interpolation error. {error_context}, template syntax : {str(e)}")
+        
 
     @property
     def name(self):
@@ -302,7 +305,11 @@ class ConfigParser:
     
     @property
     def platform(self):
-        return self.firstPhaseVars[RUNTIME_PLATFORM]
+        return self.firstPhaseVars["cdf"]["platform"]
+
+    @property
+    def config_dir(self):
+        return self.firstPhaseVars["cdf"]["config_dir"]
 
     @property
     def deployment_mode(self):

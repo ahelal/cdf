@@ -5,7 +5,14 @@ except ImportError:
     from distutils import log as logger
     logger.warn("Wheel is not available, disabling bdist_wheel hook")
 
-VERSION = '0.0.1'
+# Get version from version file
+import sys
+import os
+mydir = os.path.dirname(os.path.realpath(__file__))
+azext = os.path.join(mydir, 'azext_cdf/')
+sys.path.append(azext)
+from VERSION import VERSION
+sys.path.pop()
 
 CLASSIFIERS = [
     'Development Status :: 4 - Beta',
@@ -22,14 +29,15 @@ CLASSIFIERS = [
 DEPENDENCIES = [
     "schema",
     "pyYaml",
-    "Jinja2"
+    "Jinja2",
+    "semver"
 ]
 
 setup(
     name='cdf',
     version=VERSION,
-    description='Biceps helper',
-    author='',
+    description='CDF tools',
+    author='Adham Abdelwahab',
     author_email='',
     url='',
     long_description='XXXXX',
