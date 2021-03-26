@@ -280,7 +280,10 @@ class ConfigParser:
         outputHooks = []
         if self.data[CONFIG_HOOKS]:
             for k,v in self.data[CONFIG_HOOKS].items():
-                outputHooks.append({"name": k, "descripition": v['description'], "lifecycle": v['lifecycle']})
+                lifecycle = v['lifecycle']
+                if isinstance(lifecycle, str):
+                    lifecycle = [lifecycle]
+                outputHooks.append({"name": k, "descripition": v['description'], "lifecycle": lifecycle})
         return outputHooks
 
     @property
