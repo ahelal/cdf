@@ -175,7 +175,7 @@ class ConfigParser:
                 RUNTIME_HOOKS: self.hooks_ops
         }
 
-    def _interpolate_object(self, phase, template,variables={}):
+    def _interpolate_object(self, phase, template, variables={}):
         if isinstance(template, str):
             return self._intrerpolate_string(template, variables)
         elif isinstance(template, list):
@@ -218,7 +218,7 @@ class ConfigParser:
             variables = {**self.secondPhaseVars, **self.firstPhaseVars}
 
         if extra_vars:
-            variables = {**vars, **extra_vars}
+            variables = {**variables, **extra_vars}
 
         if context:
             error_context = f"in phase: '{phase}'', Context: '{context}'"

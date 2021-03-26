@@ -16,18 +16,21 @@ def run_hook_lifecycle(cp, state, event):
             run_hook(cp, state, [hook])
 
 def run_hook(cp, state, hook_args, recursion_n=1):
+    extra_vars = {"args": hook_args }
     hook_name = hook_args[0]
     state.addEvent(f"Running hook. hook args '{hook_args[1:]}'", hook=hook_name, flush=True)
     try:
-        _run_hook(cp, state, hook_args, recursion_n=1)
+        _run_hook(cp, state, hook_args, recursion_n=1, extra_vars=extra_vars)
     except CLIError as e:
         state.addEvent(f"Error during hook execution {str(e)}", hook=hook_name, flush=True)
         raise
 
     state.addEvent(f"Finished running hook", hook=hook_name, flush=True)
 
-def _run_hook(cp, state, hook_args, recursion_n=1):
+def _run_hook(cp, state, hook_args, recursion_n=1, extra_vars={}):
     hook_name = hook_args[0]
+    n = 0
+    ops = {}
     if recursion_n > RECURSION_LIMIT:
         raise CLIError(f"Call recursion limit reached {recursion_n - 1}")
         
@@ -37,8 +40,6 @@ def _run_hook(cp, state, hook_args, recursion_n=1):
     except KeyError as e:
         raise CLIError(f"Unknown hook name '{hook_name}'.\n{str(e)} ")
 
-    n = 0
-    ops = {}
     for op in hook['ops']:
         n += 1
         ops_name = op.get("name", op.get("descrpition", f"#{n}"))
@@ -52,6 +53,7 @@ def _run_hook(cp, state, hook_args, recursion_n=1):
 
         op_args = cp.interpolate(phase=SECOND_PHASE, 
                                         template=op['args'], 
+                                        extra_vars=extra_vars,
                                         context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
         interactive = op.get("interactive", False)
         if op['type'] == "az":
@@ -63,7 +65,7 @@ def _run_hook(cp, state, hook_args, recursion_n=1):
         elif op['type'] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args, hook_args[1:])
         elif op['type'] == "call":
-            _run_hook(cp, state, [op_args], recursion_n +1)
+            _run_hook(cp, state, [op_args], recursion_n +1, extra_vars=extra_vars)
             stdout, stderr = "", ""
 
         if op.get("name", False):
