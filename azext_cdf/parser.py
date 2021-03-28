@@ -184,6 +184,7 @@ class ConfigParser:
         self.data[CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
         self.first_phase_vars['cdf']['location'] = self.data[CONFIG_RG]
         self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP], f"key {CONFIG_UP}")
+        self.state.check_resource_group(self.data[CONFIG_RG]) # check resource group with state
 
     def _setup_second_phase_variables(self):
         self.second_phase_vars = {

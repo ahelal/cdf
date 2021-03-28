@@ -22,6 +22,7 @@ STATE_STATUS_FAILED = "failed"
 STATE_STATUS_PENDING = "pending"
 
 STATE_DEPLOYMENT_NAME = "name"
+STATE_RESOURCE_GROUP = "resource_group"
 STATE_PHASE = "phase"
 STATE_LASTUPDATE = "lastUpdate"
 STATE_STATUS = "status"
@@ -50,6 +51,7 @@ class State(object):
                 STATE_VERSION: VERSION,
                 STATE_STORE: {},
                 STATE_HOOKS_RESULT: {},
+                STATE_RESOURCE_GROUP: None,
                 STATE_UP_RESULT: {
                     STATE_UP_RESULT_OUTPUTS: {},
                     STATE_UP_RESULT_RESOURCES: {}
@@ -67,18 +69,31 @@ class State(object):
             raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
 
         if not self.state_db[STATE_DEPLOYMENT_NAME] == name:
-            raise CLIError("state error seems you have changed the delpoyment name to '{}', the state has this deployment name: {}".format(self.state_db[STATE_DEPLOYMENT_NAME], name))
+            raise CLIError("state error seems you have changed the deployment name to '{}', the state has this deployment name: {}".format(self.state_db[STATE_DEPLOYMENT_NAME], name))
+        # resource_group
         self._version_compare()
         self._setup_hooks_reference()
 
+    def check_resource_group(self, resource_group):
+        # Check resource group
+        if resource_group == self.state_db[STATE_RESOURCE_GROUP]:
+            pass
+        elif self.state_db[STATE_RESOURCE_GROUP] is None:
+            self.state_db[STATE_RESOURCE_GROUP] = resource_group
+            self._flush_state()
+        elif self.state_db[STATE_PHASE] == STATE_PHASE_UNKNOWN or self.state_db[STATE_PHASE] == STATE_PHASE_DOWN:
+            pass
+        else:
+            raise CLIError("Resource group already provisioned '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP]))
+
     def _version_compare(self):
         state_version = self.state_db['version']
-        sem_ver_com = semver.compare(state_version, VERSION)
-        if sem_ver_com == -1: # state is less then cli
+        version_compare = semver.compare(state_version, VERSION)
+        if version_compare == -1: # state is less then cli
             logger.warning(f'Your state file is out date: state version {state_version} CDF version {VERSION}. Run `up -r` to rewrite state')
-        elif sem_ver_com == 1: # state is more then cli
+        elif version_compare == 1: # state is more then cli
             logger.warning(f'Your CDF extension is outdate: state version {state_version} CLI version {VERSION}. Updgrade extension')
-        elif sem_ver_com == 0: # state is less then cli
+        elif version_compare == 0: # state is less then cli
             pass
 
     def _setup_hooks_reference(self):
@@ -160,6 +175,7 @@ class State(object):
             "Name": self.state_db[STATE_DEPLOYMENT_NAME],
             "Phase": self.state_db[STATE_PHASE],
             "Timestamp": self.state_db[STATE_LASTUPDATE],
+            "ResourceGroup": self.state_db[STATE_RESOURCE_GROUP],
             "Status": last_status_event["status"],
             "StatusMessage": last_status_event["msg"],
             "Version": self.state_db['version'],
