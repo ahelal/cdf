@@ -8,10 +8,9 @@ from azure.cli.command_modules.resource.custom import deploy_arm_template_at_res
 
 logger = get_logger(__name__)
 
-def run_command(bin, args=[], interactive=False):
-
+def run_command(bin_path, args=[], interactive=False):
     try:
-        cmd_args = [rf"{bin}"] + args
+        cmd_args = [rf"{bin_path}"] + args
         if interactive:
             subprocess.check_call(cmd_args)
             return "", ""

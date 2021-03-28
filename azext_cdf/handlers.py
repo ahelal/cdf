@@ -1,15 +1,14 @@
 import os
-import time
 import sys
-
+from collections import OrderedDict
 from knack.util import CLIError
 from knack.log import get_logger
-from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, get_deployment_at_resource_group, delete_resource
-from azure.cli.command_modules.resource.custom import build_bicep_file, run_bicep_command
+from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, get_deployment_at_resource_group, delete_resource
+from azure.cli.command_modules.resource.custom import run_bicep_command
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
 from azure.cli.core.commands.client_factory import get_subscription_id
-from azure.cli.core.commands.parameters import resource_group_name_type
+# from azure.cli.core.commands.parameters import resource_group_name_type
 from azext_cdf.parser import ConfigParser, CONFIG_PARAMS
 from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.VERSION import VERSION
@@ -20,7 +19,6 @@ from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_TE
 from azext_cdf.state import STATE_STATUS_UNKNOWN, STATE_STATUS_SUCCESS, STATE_STATUS_ERROR, STATE_STATUS_FAILED, STATE_STATUS_PENDING
 from azext_cdf.provisioner import run_bicep
 
-from collections import OrderedDict
 logger = get_logger(__name__)
 
 CONFIG_DEFAULT=".cdf.yml"
@@ -29,18 +27,15 @@ def _init_config(config, rtmp=False, working_dir=None):
     if working_dir:
         dir_change_working(working_dir)
     cp = ConfigParser(config, rtmp)
-    state = State(cp.state_file, cp.name, cp.hooks_ops)
-    cp.updateResult(state.result_up)
-    cp.updateHooksResult(state.result_hooks)
-    return cp, state
+    return cp, cp.state
 
 def test_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+    pass
     #TODO
-    print("test handler")
 
 def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None):
     #TODO
-    print(f'init {force} {example}')
+    pass
 
 def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=[], working_dir=None, confirm=False):
     cp, state = _init_config(config, False, working_dir)
@@ -59,8 +54,8 @@ def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=[], working_dir=None, con
         user_confirmation(f"You want to run a hook when the phase is not up '{status['Phase']}'. Are you sure ?")
     elif not status['Status'] == STATE_STATUS_SUCCESS:
         user_confirmation(f"You want to run a hook when the last status is not success '{status['Phase']}'. Are you sure ?")
-    
-    cp.delayedVariableInterpolite()
+
+    cp.delayed_variable_interpolite()
     run_hook(cp, state, hook_args)
 
 def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None):
@@ -72,7 +67,7 @@ def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None):
         output_status = state.status
     return output_status
 
-def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+def debug_version_handler(cmd=None, config=None, working_dir=None):
     return OrderedDict([
             ('CDF', VERSION),
             ('bicep', run_bicep_command(["--version"], auto_install=False).strip("\n")),
@@ -146,18 +141,18 @@ def down_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, working_dir=None):
         if cp.provisioner == 'bicep':
             _down_bicep(cmd, cp)
     except CLIError as e:
-        state.addEvent(f"Errored during down phase: {str(e)}", STATE_STATUS_ERROR)
+        state.add_event(f"Errored during down phase: {str(e)}", STATE_STATUS_ERROR)
         raise CLIError(e)
     except Exception as e:
-        state.addEvent(f"General error during diwb phase: {str(e)}", STATE_STATUS_ERROR)
+        state.add_event(f"General error during diwb phase: {str(e)}", STATE_STATUS_ERROR)
         raise
     
     try:
         if cp.managed_resource:
             delete_resource(cmd, resource_ids=[f"/subscriptions/{get_subscription_id(cmd.cli_ctx)}/resourceGroups/{cp.resource_group_name}"])
-    except Exception as e:
-        if not "failed to be deleted" in str(e):
-            raise e
+    except Exception as error:
+        if "failed to be deleted" not in str(error):
+            raise error
 
     state.setResult(outputs={}, resources={}, flush=True)
     state.completedPhase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
@@ -207,14 +202,13 @@ def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir
                         no_prompt=False,
                         complete_deployment=cp.deployment_mode)
 
-    except CLIError as e:
-        state.addEvent(f"Errored during up phase: {str(e)}", STATE_STATUS_ERROR)
-        raise CLIError(e)
-    except Exception as e:
-        state.addEvent(f"General error during up phase: {str(e)}", STATE_STATUS_ERROR)
+    except CLIError as error:
+        state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
+        raise
+    except Exception as error:
+        state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
         raise
 
     state.setResult(outputs=outputs, resources=output_resources, flush=True)
     state.completedPhase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
     run_hook_lifecycle(cp, state, LIFECYCLE_POST_UP)
-    # cp.updateResult(outputs=outputs, resources=output_resources)

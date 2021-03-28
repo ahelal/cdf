@@ -1,11 +1,12 @@
-from knack.util import CLIError
-from azext_cdf.utils import json_load, is_equal_or_in, file_read_content, file_write_content
-from knack.log import get_logger
-from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE
-from azext_cdf.provisioner import run_command
 import os
 import stat
 import shlex
+
+from knack.util import CLIError
+from knack.log import get_logger
+from azext_cdf.utils import is_equal_or_in, file_read_content, file_write_content
+from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE, RUNTIME_RUN_ONCE
+from azext_cdf.provisioner import run_command
 
 logger = get_logger(__name__)
 RECURSION_LIMIT = 5
@@ -15,87 +16,106 @@ def run_hook_lifecycle(cp, state, event):
         if is_equal_or_in(event, cp.data[CONFIG_HOOKS][hook]["lifecycle"]):
             run_hook(cp, state, [hook])
 
-def run_hook(cp, state, hook_args, recursion_n=1):
+
+def evalue_condition(cp, name, hook, extra_vars=None):
+    run_if = cp.interpolate(phase=SECOND_PHASE,
+                            template=hook['run_if'],
+                            extra_vars=extra_vars,
+                            context=f"condition evalution for hook '{name}'")
+    run_if = run_if.strip()
+    if run_if.lower() in ['true', '1', 't', 'y', 'yes']:
+        return True
+    elif run_if.lower() in ['false', '0', 'f', 'n', 'no']:
+        return False
+    elif RUNTIME_RUN_ONCE in run_if:
+        condition = cp.state.result_hooks[name].get("_condition", {})
+        ran = condition.get("ran", False)
+        return not ran
+    else:
+        raise CLIError("A known bolean evalution of condition hook '{}' expression '{}'".format(run_if, name))
+
+def run_hook(cp, state, hook_args):
     extra_vars = {"args": hook_args }
     hook_name = hook_args[0]
-    state.addEvent(f"Running hook. hook args '{hook_args[1:]}'", hook=hook_name, flush=True)
+    state.add_event(f"Running hook. hook args '{hook_args[1:]}'", hook=hook_name, flush=True)
     try:
-        _run_hook(cp, state, hook_args, recursion_n=1, extra_vars=extra_vars)
-    except CLIError as e:
-        state.addEvent(f"Error during hook execution {str(e)}", hook=hook_name, flush=True)
+        if _run_hook(cp, state, hook_args, extra_vars=extra_vars) == "skip":
+            state.add_event("Skipping running hook, condition evaluted to false", hook=hook_name, flush=True)    
+            return
+        state.add_event("Finished running hook", hook=hook_name, flush=True)
+        state.set_hook_state(hook_name, '_condition', {"ran": True}, flush=True)
+    except CLIError as error:
+        state.add_event(f"Error during hook execution {str(error)}", hook=hook_name, flush=True)
         raise
 
-    state.addEvent(f"Finished running hook", hook=hook_name, flush=True)
-
-def _run_hook(cp, state, hook_args, recursion_n=1, extra_vars={}):
+def _run_hook(cp, state, hook_args, recursion_n=1, extra_vars=None):
     hook_name = hook_args[0]
-    n = 0
-    ops = {}
+    operation_num = 0
+    hook = cp.data[CONFIG_HOOKS][hook_name]
+    if not evalue_condition(cp, hook_name, hook, extra_vars):
+        logger.debug("Condition for hook {} evaluted to false".format(hook_name))
+        return "skip"
+
     if recursion_n > RECURSION_LIMIT:
         raise CLIError(f"Call recursion limit reached {recursion_n - 1}")
-        
+
     logger.info(f"Entering hook {hook_name} and hook_args {hook_args}")
     try:
         hook = cp.data[CONFIG_HOOKS][hook_name]
-    except KeyError as e:
-        raise CLIError(f"Unknown hook name '{hook_name}'.\n{str(e)} ")
+    except KeyError as error:
+        raise CLIError(f"Unknown hook name '{hook_name}'.\n{str(error)}") from error
 
-    for op in hook['ops']:
-        n += 1
-        ops_name = op.get("name", op.get("descrpition", f"#{n}"))
-        if is_equal_or_in("",  op['platform']):
+    for operation in hook['ops']:
+        operation_num += 1
+        ops_name = operation.get("name", operation.get("descrpition", f"#{operation_num}"))
+        if is_equal_or_in("",  operation['platform']):
             pass # all platforms
-        elif is_equal_or_in(cp.platform,  op['platform']):
+        elif is_equal_or_in(cp.platform,  operation['platform']):
             pass # my platfrom
         else:
-            # Skip 
-            continue
+            continue # Skip
 
-        op_args = cp.interpolate(phase=SECOND_PHASE, 
-                                        template=op['args'], 
+        op_args = cp.interpolate(phase=SECOND_PHASE,
+                                        template=operation['args'],
                                         extra_vars=extra_vars,
                                         context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
-        interactive = op.get("interactive", False)
-        if op['type'] == "az":
-            stdout, stderr = _run_az(hook_name, ops_name, op_args, hook_args[1:])
-        elif op['type'] == "cmd":
-            stdout, stderr = _run_cmd(hook_name, ops_name, op_args, hook_args[1:], interactive)
-        elif op['type'] == "script":
+        interactive = operation.get("interactive", False)
+        if operation['type'] == "az":
+            stdout, stderr = _run_az(hook_name, ops_name, op_args)
+        elif operation['type'] == "cmd":
+            stdout, stderr = _run_cmd(hook_name, ops_name, op_args, interactive)
+        elif operation['type'] == "script":
             stdout, stderr = _run_script(hook_name, ops_name, op_args, hook_args[1:], cp)
-        elif op['type'] == "print":
-            stdout, stderr = _run_print(hook_name, ops_name, op_args, hook_args[1:])
-        elif op['type'] == "call":
+        elif operation['type'] == "print":
+            stdout, stderr = _run_print(hook_name, ops_name, op_args)
+        elif operation['type'] == "call":
             _run_hook(cp, state, [op_args], recursion_n +1, extra_vars=extra_vars)
             stdout, stderr = "", ""
 
-        if op.get("name", False):
-            state.setHooksResult(hook=hook_name, op=op['name'], op_data={"stdout": stdout,"stderr": stderr}, flush=True)
+        if operation.get("name", False):
+            state.set_hook_state(hook=hook_name, op=operation['name'], op_data={"stdout": stdout,"stderr": stderr}, flush=True)
             cp.updateHooksResult(state.result_hooks)
 
-def _run_print(hook_name, ops_name, op_args, hook_args):
+def _run_print(hook_name, ops_name, op_args):
     stdout = f"Print {hook_name} | {ops_name}\n{op_args}"
     print(stdout)
     return stdout, ""
 
-def _run_cmd(hook_name, ops_name, op_args, hook_args, interactive=False):
+def _run_cmd(hook_name, ops_name, op_args, interactive=False):
     if isinstance(op_args, str):
         op_args = shlex.split(op_args)
     try:
-        stdout, stder = run_command(op_args[0], op_args[1:], interactive=interactive)
-    except Exception as e:
-        raise CLIError(f"Failed during cmd execution in op '{ops_name}' in hook '{hook_name}'.\n{str(e)} ")
-    return stdout, stder
+        return run_command(op_args[0], op_args[1:], interactive=interactive)
+    except Exception as error:
+        raise CLIError(f"Failed during cmd execution in op '{ops_name}' in hook '{hook_name}'.\n{str(error)}") from error
 
-def _run_az(hook_name, ops_name, op_args, hook_args):
+def _run_az(hook_name, ops_name, op_args):
     if isinstance(op_args, str):
         op_args = shlex.split(op_args)
     try:
-        stdout, stder = run_command("az", op_args)
-    except Exception as e:
-        raise CLIError(f"Failed during AZ execution in op '{ops_name}' in hook '{hook_name}'.\n{str(e)} ")
-    # stdout = json_load(stdout)
-    return stdout, stder
-    # logger.info(f"Running op {op['name']}")
+        return run_command("az", op_args)
+    except Exception as error:
+        raise CLIError(f"Failed during AZ execution in op '{ops_name}' in hook '{hook_name}'.\n{str(error)}") from error
 
 def _run_script(hook_name, ops_name, op_args, hook_args, cp):
     if isinstance(op_args, str):

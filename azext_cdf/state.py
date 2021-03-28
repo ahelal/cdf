@@ -1,10 +1,10 @@
+from copy import deepcopy
+from datetime import datetime
 import semver
+from knack.util import CLIError
+from knack.log import get_logger
 from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load
 from azext_cdf.VERSION import VERSION
-from datetime import datetime
-from knack.util import CLIError
-from copy import deepcopy
-from knack.log import get_logger
 
 STATE_PHASE_UNKNOWN = "unknown"
 STATE_PHASE_GOING_UP = "transitioning_up"
@@ -30,6 +30,9 @@ STATE_UP_RESULT = "result"
 STATE_UP_RESULT_OUTPUTS = "outputs"
 STATE_UP_RESULT_RESOURCES = "resources"
 STATE_HOOKS_RESULT = "hooks"
+STATE_HOOKS_RESULT = "hooks"
+STATE_VERSION = "version"
+STATE_STORE = "store"
 
 logger = get_logger(__name__)
 
@@ -44,7 +47,8 @@ class State(object):
                 STATE_LASTUPDATE: self.timestamp(),
                 STATE_STATUS: -1,
                 STATE_EVENTS: [],
-                "version": VERSION,
+                STATE_VERSION: VERSION,
+                STATE_STORE: {},
                 STATE_HOOKS_RESULT: {},
                 STATE_UP_RESULT: {
                     STATE_UP_RESULT_OUTPUTS: {},
@@ -52,15 +56,15 @@ class State(object):
                 }
             }
             self._setup_hooks_reference()
-            self.addEvent("Created state file", status=STATE_STATUS_UNKNOWN, flush=True)
+            self.add_event("Created state file", status=STATE_STATUS_UNKNOWN, flush=True)
             return
-        
-        # file exists
+
+        # state file exists
         try:
             state_str = file_read_content(self.state_file)
             self.state_db = json_load(state_str)
-        except CLIError as e:
-            raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(e)}")
+        except CLIError as error:
+            raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
 
         if not self.state_db[STATE_DEPLOYMENT_NAME] == name:
             raise CLIError("state error seems you have changed the delpoyment name to '{}', the state has this deployment name: {}".format(self.state_db[STATE_DEPLOYMENT_NAME], name))
@@ -77,17 +81,18 @@ class State(object):
         elif sem_ver_com == 0: # state is less then cli
             pass
 
-
     def _setup_hooks_reference(self):
         # hooks/ops in state db but not config_db
         current_state_db_hooks = deepcopy(self.state_db[STATE_HOOKS_RESULT])
         for state_hook in current_state_db_hooks:
             if state_hook in self.config_hooks:
                 for state_op in current_state_db_hooks[state_hook]:
-                    if not state_op in self.config_hooks[state_hook]:
+                    if state_op[0] == "_":
+                        pass # ignore _
+                    elif not state_op in self.config_hooks[state_hook]:
                         self.state_db[STATE_HOOKS_RESULT][state_hook].pop(state_op)
             else:
-                self.state_db[STATE_HOOKS_RESULT].pop(state_hook) #remove hook outdate 
+                self.state_db[STATE_HOOKS_RESULT].pop(state_hook) #remove hook outdate
 
         # hooks/ops in config db but not config_db
         for config_hook in self.config_hooks:
@@ -97,59 +102,68 @@ class State(object):
                 if not config_op in self.state_db[STATE_HOOKS_RESULT][config_hook]:
                     self.state_db[STATE_HOOKS_RESULT][config_hook][config_op] = {}
 
-    def _flushState(self, flush=True):
+    def _flush_state(self, flush=True):
         if flush:
             json_write_to_file(self.state_file, self.state_db)
 
     def transitionToPhase(self, phase):
-        self.addEvent(f"Transitioning to {phase}", phase=phase, status=STATE_STATUS_PENDING, flush=True)
+        self.add_event(f"Transitioning to {phase}", phase=phase, status=STATE_STATUS_PENDING, flush=True)
 
     def completedPhase(self, phase, status, msg=""):
         if status == STATE_STATUS_SUCCESS:
-            self.addEvent(f"Successfully reached {phase}. { msg }", phase=phase, status=STATE_STATUS_SUCCESS, flush=True)
+            self.add_event(f"Successfully reached {phase}. { msg }", phase=phase, status=STATE_STATUS_SUCCESS, flush=True)
         elif status == STATE_STATUS_ERROR:
-            self.addEvent(f"Errored during {phase}. { msg }", status=STATE_STATUS_ERROR, flush=True)
+            self.add_event(f"Errored during {phase}. { msg }", status=STATE_STATUS_ERROR, flush=True)
         elif status == STATE_STATUS_FAILED:
-            self.addEvent(f"Failed during {phase}. { msg }", status=STATE_STATUS_FAILED, flush=True)
+            self.add_event(f"Failed during {phase}. { msg }", status=STATE_STATUS_FAILED, flush=True)
 
-    def addEvent(self, msg, status=None, phase=None, hook=None, flush=True):
+    def add_event(self, msg, status=None, phase=None, hook=None, flush=True):
         if phase:
             self.state_db[STATE_PHASE] = phase
         event = {"timestamp": self.timestamp(), "phase": self.state_db[STATE_PHASE], "msg": msg, "status": status, "hook": hook}
         self.state_db[STATE_EVENTS].append(event)
         if status:
             self.state_db[STATE_STATUS] = len(self.state_db[STATE_EVENTS]) -1
-        self._flushState(flush)
+        self._flush_state(flush)
 
     def setResult(self, outputs=None, resources=None, flush=True):
         if resources:
             self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_OUTPUTS] = outputs
         if outputs:
             self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_RESOURCES] = resources
-        self._flushState(flush)
+        self._flush_state(flush)
 
-    def setHooksResult(self, hook, op, op_data, flush=True):
-        self.state_db[STATE_HOOKS_RESULT][hook][op] = op_data
-        self._flushState(flush)
+    def set_hook_state(self, hook, op, op_data, flush=True):
+        if not self.state_db[STATE_HOOKS_RESULT][hook].get(op, False):
+            self.state_db[STATE_HOOKS_RESULT][hook][op] = {}
+        self.state_db[STATE_HOOKS_RESULT][hook][op] = {**self.state_db[STATE_HOOKS_RESULT][hook][op], **op_data}        
+        self._flush_state(flush)
+
+    def store_get(self, key, value):
+        try:
+            return self.state_db[STATE_STORE][key]
+        except KeyError:
+            self.state_db[STATE_STORE][key] = value
+            return value
 
     @staticmethod
     def timestamp():
         # utc='%H:%M:%S %d/%m/%Y-%Z'
         # return datetime.utcnow().strftime(utc)
-        local='%H:%M:%S %d/%m/%Y'
+        local = '%H:%M:%S %d/%m/%Y'
         return datetime.now().strftime(local)
 
     @property
     def status(self):
         last_status_event = self.state_db[STATE_EVENTS][self.state_db[STATE_STATUS]]
         return_status = {
-                "Name": self.state_db[STATE_DEPLOYMENT_NAME],
-                "Phase": self.state_db[STATE_PHASE],
-                "Timestamp": self.state_db[STATE_LASTUPDATE],
-                "Status": last_status_event["status"],
-                "StatusMessage": last_status_event["msg"],
-                "Version": self.state_db['version'],
-            }
+            "Name": self.state_db[STATE_DEPLOYMENT_NAME],
+            "Phase": self.state_db[STATE_PHASE],
+            "Timestamp": self.state_db[STATE_LASTUPDATE],
+            "Status": last_status_event["status"],
+            "StatusMessage": last_status_event["msg"],
+            "Version": self.state_db['version'],
+        }
         return return_status
 
     @property
@@ -157,12 +171,12 @@ class State(object):
         return_events = []
         for event in reversed(self.state_db[STATE_EVENTS]):
             return_events.append({
-                    "Timestamp": event["timestamp"],
-                    "Phase": event["phase"],
-                    "Message": event["msg"],
-                    "Status": event["status"],
-                    "Hook": event["hook"],
-                })
+                "Timestamp": event["timestamp"],
+                "Phase": event["phase"],
+                "Message": event["msg"],
+                "Status": event["status"],
+                "Hook": event["hook"],
+            })
         return return_events
 
     @property
@@ -175,4 +189,4 @@ class State(object):
 
     @property
     def state(self):
-        return self.state_db   
+        return self.state_db

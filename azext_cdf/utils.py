@@ -3,10 +3,10 @@ import os
 import glob
 import json
 import shutil
-from knack.util import CLIError
 from os import access, R_OK
-from knack.log import get_logger
 from json import JSONDecodeError
+from knack.log import get_logger
+from knack.util import CLIError
 
 logger = get_logger(__name__)
 
@@ -17,12 +17,12 @@ def real_dirname(p):
 def dir_exists(filepath):
     if not os.path.exists(filepath):
         return False
-    # if it exists it should be a dir or a link 
+    # if it exists it should be a dir or a link
     return os.path.isdir(filepath)
 
 def dir_create(filepath):
     if dir_exists(filepath):
-        return 
+        return
     try:
         os.mkdir(filepath)
     except OSError as e:
@@ -40,7 +40,10 @@ def dir_change_working(dirpath):
     abs_path = os.path.realpath(dirpath)
     if not abs_path:
         raise CLIError(f"Invalid working directory supplied {abs_path}")
-    os.chdir(abs_path) 
+    try:
+        os.chdir(abs_path) 
+    except FileNotFoundError as e:
+        raise CLIError(f"Change working dir failed. {str(e)}")
 
 def file_exits(filepath):
     if not os.path.exists(filepath):
