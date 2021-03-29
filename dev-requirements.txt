@@ -1,6 +1,7 @@
 azure-cli
 pytest
 schema
-autopep8
+black
+pylint
 wheel
 semver

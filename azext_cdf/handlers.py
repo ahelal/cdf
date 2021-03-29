@@ -1,4 +1,5 @@
-import os
+''' Commands handler '''
+
 import sys
 from collections import OrderedDict
 from knack.util import CLIError
@@ -10,121 +11,130 @@ from azure.cli.core import __version__ as azure_cli_core_version
 from azure.cli.core.commands.client_factory import get_subscription_id
 # from azure.cli.core.commands.parameters import resource_group_name_type
 from azext_cdf.parser import ConfigParser, CONFIG_PARAMS
-from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
-from azext_cdf.VERSION import VERSION
+from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN, LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
+from azext_cdf.version import version
 from azext_cdf.utils import json_write_to_file, find_the_right_file, dir_change_working, json_load, file_read_content, file_exits
 from azext_cdf.hooks import run_hook, run_hook_lifecycle
-from azext_cdf.state import State
 from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_TESTED, STATE_PHASE_TESTING, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
 from azext_cdf.state import STATE_STATUS_UNKNOWN, STATE_STATUS_SUCCESS, STATE_STATUS_ERROR, STATE_STATUS_FAILED, STATE_STATUS_PENDING
 from azext_cdf.provisioner import run_bicep
 
 logger = get_logger(__name__)
 
-CONFIG_DEFAULT=".cdf.yml"
+CONFIG_DEFAULT = ".cdf.yml"
 
-def _init_config(config, rtmp=False, working_dir=None):
+def _init_config(config, remove_tmp=False, working_dir=None):
     if working_dir:
         dir_change_working(working_dir)
-    cp = ConfigParser(config, rtmp)
-    return cp, cp.state
+    cobj = ConfigParser(config, remove_tmp)
+    return cobj
 
 def test_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+    #pylint: disable=unused-argument
+    # TODO
     pass
-    #TODO
 
 def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None):
-    #TODO
+    #pylint: disable=unused-argument
+    # cobj = _init_config(config, False, working_dir)
+    # TODO
     pass
 
 def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=[], working_dir=None, confirm=False):
-    cp, state = _init_config(config, False, working_dir)
-    if len(hook_args) == 0:
-       return cp.hook_table
+    #pylint: disable=unused-argument
+    cobj = _init_config(config, False, working_dir)
+    if hook_args:
+        return cobj.hook_table
 
-    hook = hook_args[0] # hook is the first arg
-    hooks = cp.hook_names
-    if hook not in hooks:
-        raise CLIError(f"unknown hook name '{hook}', Supported hooks '{hooks}")
-    status = state.status
+    hook_name = hook_args[0] # hook is the first arg
+    hooks_names = cobj.hook_names
+    if hook_name not in hooks_names:
+        raise CLIError(f"unknown hook name '{hook_name}', Supported hooks '{hooks_names}")
+    status = cobj.state.status
 
     if confirm:
         pass
-    elif not status['Phase'] == STATE_PHASE_UP: 
+    elif not status['Phase'] == STATE_PHASE_UP:
         user_confirmation(f"You want to run a hook when the phase is not up '{status['Phase']}'. Are you sure ?")
     elif not status['Status'] == STATE_STATUS_SUCCESS:
         user_confirmation(f"You want to run a hook when the last status is not success '{status['Phase']}'. Are you sure ?")
 
-    cp.delayed_variable_interpolite()
-    run_hook(cp, state, hook_args)
+    cobj.delayed_variable_interpolite()
+    run_hook(cobj, hook_args)
+    return None
 
 def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None):
-    cp, state = _init_config(config, False, working_dir)
+    #pylint: disable=unused-argument
+    cobj = _init_config(config, False, working_dir)
     output_status = {}
     if events:
-        output_status['events'] = state.events
+        output_status['events'] = cobj.state.events
     else:
-        output_status = state.status
+        output_status = cobj.state.status
     return output_status
 
-def debug_version_handler(cmd=None, config=None, working_dir=None):
+def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+    #pylint: disable=unused-argument
     return OrderedDict([
-            ('CDF', VERSION),
-            ('bicep', run_bicep_command(["--version"], auto_install=False).strip("\n")),
-            ('az-cli', azure_cli_core_version),
-            ('python', sys.version),
-        ])
+        ('CDF', version),
+        ('bicep', run_bicep_command(["--version"], auto_install=False).strip("\n")),
+        ('az-cli', azure_cli_core_version),
+        ('python', sys.version.strip("\n")),
+    ])
 
 def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
-    cp, _ = _init_config(config, False, working_dir)
-    return cp.config
+    #pylint: disable=unused-argument
+    cobj = _init_config(config, False, working_dir)
+    return cobj.config
 
 def debug_state_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
-    cp, state = _init_config(config, False, working_dir)
-    return state.state
+    #pylint: disable=unused-argument
+    cobj = _init_config(config, False, working_dir)
+    return cobj.state.state
 
 def debug_result_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
-    cp, state = _init_config(config, False, working_dir)
-    return state.result_up
+    #pylint: disable=unused-argument
+    cobj = _init_config(config, False, working_dir)
+    return cobj.state.result_up
 
 def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
-    cp, state = _init_config(config, False, working_dir)
-    deployment_show = []
-    if cp.provisioner == 'bicep':
-        if not file_exits(f"{cp.tmp_dir}/targetfile.json"):
-            raise CLIError(f"{cp.tmp_dir}/targetfile.json does not exisit please run up first")
-        arm_deployment = json_load(file_read_content(f"{cp.tmp_dir}/targetfile.json"))
+    cobj = _init_config(config, False, working_dir)
+    if cobj.provisioner == 'bicep':
+        if not file_exits(f"{cobj.tmp_dir}/targetfile.json"):
+            raise CLIError(f"{cobj.tmp_dir}/targetfile.json does not exists please run up first")
+        arm_deployment = json_load(file_read_content(f"{cobj.tmp_dir}/targetfile.json"))
         deployments_status = []
-        deployment = _check_deployment_error(cmd, resource_group_name=cp.resource_group_name, deployment_name=cp.name, type='Microsoft.Resources/deployments')
+        deployment = _check_deployment_error(cmd, resource_group_name=cobj.resource_group_name, deployment_name=cobj.name, deployment_type='Microsoft.Resources/deployments')
         if  deployment:
             deployments_status.append(deployment)
 
-        for d in arm_deployment['resources']:
-            deployment = _check_deployment_error(cmd, resource_group_name=cp.resource_group_name, deployment_name=d['name'], type=d['type'] )
+        for nested_deployment in arm_deployment['resources']:
+            deployment = _check_deployment_error(cmd, resource_group_name=cobj.resource_group_name, deployment_name=nested_deployment['name'], deployment_type=nested_deployment['type'])
             if deployment:
                 deployments_status.append(deployment)
         return deployments_status
 
 def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phase=2):
-    cp, state = _init_config(config, False, working_dir)
-    line=""
-    print("Type your jinj2 expression.")
+    #pylint: disable=unused-argument
+    cobj = _init_config(config, False, working_dir)
+    line = ""
+    print("Type your jinja2 expression.")
     print("to exit type 'quit' or 'exit' or 'ctrl+c'.")
-    while not line.lower() in ("quit","exit"):
+    while line.lower() not in ("quit", "exit"):
         print("> ", end='')
         try:
             line = input()
             if line == '':
                 break
-            print(cp.interpolate(phase=phase, template=line))
+            print(cobj.interpolate(phase=phase, template=line))
         except EOFError:
             return
-        except CLIError as e:
-            print(f"Error : {str(e)}")
+        except CLIError as error:
+            print(f"Error : {str(error)}")
 
-def _check_deployment_error(cmd, resource_group_name, deployment_name, type):
+def _check_deployment_error(cmd, resource_group_name, deployment_name, deployment_type):
     deployment_status = {}
-    if not type == 'Microsoft.Resources/deployments':
+    if not deployment_type == 'Microsoft.Resources/deployments':
         return deployment_status
     deployment = get_deployment_at_resource_group(cmd, resource_group_name=resource_group_name, deployment_name=deployment_name)
     properties = deployment.as_dict().get('properties')
@@ -133,33 +143,33 @@ def _check_deployment_error(cmd, resource_group_name, deployment_name, type):
         deployment_status.update({"error": error, "name": deployment_name})
     return deployment_status
 
-def down_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, working_dir=None):
-    cp, state = _init_config(config, rtmp, working_dir)
-    state.transitionToPhase(STATE_PHASE_GOING_DOWN)
-    run_hook_lifecycle(cp, state, LIFECYCLE_PRE_DOWN)
+def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None):
+    cobj = _init_config(config, remove_tmp, working_dir)
+    cobj.state.transitionToPhase(STATE_PHASE_GOING_DOWN)
+    run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
     try:
-        if cp.provisioner == 'bicep':
-            _down_bicep(cmd, cp)
-    except CLIError as e:
-        state.add_event(f"Errored during down phase: {str(e)}", STATE_STATUS_ERROR)
-        raise CLIError(e)
-    except Exception as e:
-        state.add_event(f"General error during diwb phase: {str(e)}", STATE_STATUS_ERROR)
+        if cobj.provisioner == 'bicep':
+            _down_bicep(cmd, cobj)
+    except CLIError as error:
+        cobj.state.add_event(f"Errored during down phase: {str(error)}", STATE_STATUS_ERROR)
+        raise CLIError(error) from error
+    except Exception as error:
+        cobj.state.add_event(f"General error during down phase: {str(error)}", STATE_STATUS_ERROR)
         raise
-    
+
     try:
-        if cp.managed_resource:
-            delete_resource(cmd, resource_ids=[f"/subscriptions/{get_subscription_id(cmd.cli_ctx)}/resourceGroups/{cp.resource_group_name}"])
+        if cobj.managed_resource:
+            delete_resource(cmd, resource_ids=[f"/subscriptions/{get_subscription_id(cmd.cli_ctx)}/resourceGroups/{cobj.resource_group_name}"])
     except Exception as error:
         if "failed to be deleted" not in str(error):
-            raise error
+            raise error from error
 
-    state.setResult(outputs={}, resources={}, flush=True)
-    state.completedPhase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
-    run_hook_lifecycle(cp, state, LIFECYCLE_POST_DOWN)
+    cobj.state.setResult(outputs={}, resources={}, flush=True)
+    cobj.state.completedPhase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
+    run_hook_lifecycle(cobj, LIFECYCLE_POST_DOWN)
 
-def _down_bicep(cmd, cp):
-    #TODO check deployment exisits before doing an empty deployment
+def _down_bicep(cmd, cobj):
+    # TODO check deployment exists before doing an empty deployment
     empty_deployment = {
         "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
         "contentVersion": "1.0.0.0",
@@ -168,47 +178,48 @@ def _down_bicep(cmd, cp):
         "resources": [],
         "outputs": {}
     }
-    json_write_to_file(f"{cp.tmp_dir}/empty_deployment.json", empty_deployment)
+    json_write_to_file(f"{cobj.tmp_dir}/empty_deployment.json", empty_deployment)
     try:
-        deployment = deploy_arm_template_at_resource_group(cmd, 
-                                                       resource_group_name=cp.resource_group_name, 
-                                                       template_file=f"{cp.tmp_dir}/empty_deployment.json", 
-                                                       deployment_name=cp.name,
-                                                       mode="Complete",
-                                                       no_wait=False)
-    except CLIError as e:
-        if "ResourceGroupNotFound" in str(e):
+        deploy_arm_template_at_resource_group(cmd,
+                                              resource_group_name=cobj.resource_group_name,
+                                              template_file=f"{cobj.tmp_dir}/empty_deployment.json",
+                                              deployment_name=cobj.name,
+                                              mode="Complete",
+                                              no_wait=False)
+    except CLIError as error:
+        if "ResourceGroupNotFound" in str(error):
             pass
         else:
-            raise CLIError(e)
-    
-def up_handler(cmd, config=CONFIG_DEFAULT, rtmp=False, prompt=False, working_dir=None):
-    cp, state = _init_config(config, rtmp, working_dir)
-    state.transitionToPhase(STATE_PHASE_GOING_UP)
+            raise CLIError(error) from error
+
+def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None):
+    #pylint: disable=unused-argument
+    cobj = _init_config(config, remove_tmp, working_dir)
+    cobj.state.transitionToPhase(STATE_PHASE_GOING_UP)
     # Run pre up life cycle
-    run_hook_lifecycle(cp, state, LIFECYCLE_PRE_UP)
+    run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
     # Run template interpolite
-    cp.preUpInterpolite()
+    cobj.preUpInterpolite()
     try:
-        if cp.provisioner == 'bicep':
-            output_resources, outputs= run_bicep(cmd, 
-                        deployment_name=cp.name,
-                        bicep_file= find_the_right_file(cp.up_file, 'bicep', '*.bicep', cp.config_dir),
-                        tmp_dir=cp.tmp_dir,
-                        resource_group=cp.resource_group_name, 
-                        location=cp.location, 
-                        params=cp.data[CONFIG_PARAMS],
-                        manage_resource_group=cp.managed_resource,
-                        no_prompt=False,
-                        complete_deployment=cp.deployment_mode)
+        if cobj.provisioner == 'bicep':
+            output_resources, outputs = run_bicep(cmd,
+                                                  deployment_name=cobj.name,
+                                                  bicep_file=find_the_right_file(cobj.up_file, 'bicep', '*.bicep', cobj.config_dir),
+                                                  tmp_dir=cobj.tmp_dir,
+                                                  resource_group=cobj.resource_group_name,
+                                                  location=cobj.location,
+                                                  params=cobj.data[CONFIG_PARAMS],
+                                                  manage_resource_group=cobj.managed_resource,
+                                                  no_prompt=False,
+                                                  complete_deployment=cobj.deployment_mode)
 
     except CLIError as error:
-        state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
+        cobj.state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
         raise
     except Exception as error:
-        state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
+        cobj.state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
         raise
 
-    state.setResult(outputs=outputs, resources=output_resources, flush=True)
-    state.completedPhase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
-    run_hook_lifecycle(cp, state, LIFECYCLE_POST_UP)
+    cobj.state.setResult(outputs=outputs, resources=output_resources, flush=True)
+    cobj.state.completedPhase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
+    run_hook_lifecycle(cobj, LIFECYCLE_POST_UP)

@@ -20,6 +20,12 @@ uninstall:
 install: build uninstall
 	az extension add --upgrade -y --source ./dist/$(EXTENTION_NAME)*.whl
 
+test-lint:
+	pylint azext_cdf
+	
+test-unit:
+	python3 -m unittest discover -s tests/unit/ -p '*_test.py' -v
+
 clean:
 	rm -rf build
 	rm -rf dist/

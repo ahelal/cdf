@@ -1,7 +1,9 @@
+''' Utils test'''
+
 import unittest
 import tempfile
 import shutil
-from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load
+from azext_cdf.utils import file_exits
 
 class TestFileExits(unittest.TestCase):
     def setUp(self):

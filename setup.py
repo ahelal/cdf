@@ -1,4 +1,5 @@
-from setuptools import setup, find_packages
+"""Wheel setup file"""
+
 try:
     from azure_bdist_wheel import cmdclass
 except ImportError:
@@ -8,10 +9,12 @@ except ImportError:
 # Get version from version file
 import sys
 import os
-mydir = os.path.dirname(os.path.realpath(__file__))
-azext = os.path.join(mydir, 'azext_cdf/')
+
+from setuptools import setup, find_packages
+azext = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'azext_cdf/')
 sys.path.append(azext)
-from VERSION import VERSION
+from version import version
+
 sys.path.pop()
 
 CLASSIFIERS = [
@@ -35,7 +38,7 @@ DEPENDENCIES = [
 
 setup(
     name='cdf',
-    version=VERSION,
+    version=version,
     description='CDF tools',
     author='Adham Abdelwahab',
     author_email='',

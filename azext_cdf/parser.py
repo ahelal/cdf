@@ -1,3 +1,5 @@
+''' Configuration module'''
+
 import os
 import platform
 import yaml
@@ -6,7 +8,7 @@ from knack.util import CLIError
 from schema import Schema, And,Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction,Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError
-from azext_cdf.VERSION import VERSION
+from azext_cdf.version import version
 from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname
 from azext_cdf.state import State
 
@@ -60,12 +62,12 @@ def template_file(ctx, name):
     return data
 
 class ConfigParser:
-    def __init__(self, config, rtmp=False):
+    def __init__(self, config, remove_tmp=False):
         self.data = {}
         self._config = config
         self.first_phase_vars = {}
         self.second_phase_vars = {}
-        self._rtmp = rtmp
+        self._remove_tmp = remove_tmp
         # https://github.com/keleshev/schema
         hooks_schema = {
             str: {
@@ -149,7 +151,7 @@ class ConfigParser:
     def _setup_first_phase_interpolation(self):
         self.first_phase_vars = {
             "cdf":{
-                "version": VERSION,
+                "version": version,
                 "config_dir": real_dirname(self._config),
                 "platform": platform.system().lower(),
             },
@@ -172,7 +174,7 @@ class ConfigParser:
         self.data[CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], f"key {CONFIG_TMP}")
         self.first_phase_vars["cdf"]["tmp_dir"] = self.data[CONFIG_TMP]
         # remove and create tmp dir incase we will download some stuff for templates
-        if self._rtmp:
+        if self._remove_tmp:
             dir_remove(self.data[CONFIG_TMP])
         dir_create(self.data[CONFIG_TMP])
         self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE], f"key {CONFIG_STATE_FILE}")
@@ -197,7 +199,7 @@ class ConfigParser:
 
     def _interpolate_object(self, phase, template, variables=None):
         if isinstance(template, str):
-            return self._intrerpolate_string(template, variables)
+            return self._interpolate_string(template, variables)
         elif isinstance(template, list):
             interpolated_list = []
             for template_item in template:
@@ -209,9 +211,9 @@ class ConfigParser:
                 interpolated_dict.update({template_key: self._interpolate_object(phase, template_value, variables)})
             return interpolated_dict
         else:
-            raise CLIError(f"unsporrted type in interpolate f{type(template)}, '{template}'")
+            raise CLIError(f"unsupported type in interpolate f{type(template)}, '{template}'")
 
-    def _intrerpolate_string(self, string, variables):
+    def _interpolate_string(self, string, variables):
         template_string = self.jinja_env.from_string(string)
         return template_string.render(variables)
 
@@ -228,7 +230,7 @@ class ConfigParser:
     def preUpInterpolite(self):
         self.delayed_variable_interpolite()
         if CONFIG_PARAMS in self.data:
-            for v,k in self.data[CONFIG_PARAMS].items():
+            for v, k in self.data[CONFIG_PARAMS].items():
                 self.data[CONFIG_PARAMS][v] = self.interpolate(FIRST_PHASE, k, f"variables in config in preUpInterpolite '{k}'")
 
     def interpolate(self, phase, template, context=None, extra_vars=None):
@@ -252,9 +254,9 @@ class ConfigParser:
         # except TypeError as e:
         #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
         except UndefinedError as error:
-            raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(error)}")
+            raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(error)}") from error
         except TemplateSyntaxError as error:
-            raise CLIError(f"config interpolation error. {error_context}, template syntax : {str(error)}")
+            raise CLIError(f"config interpolation error. {error_context}, template syntax : {str(error)}") from error
 
     @property
     def name(self):
@@ -300,11 +302,11 @@ class ConfigParser:
     def hook_table(self):
         output_hooks = []
         # if self.data[CONFIG_HOOKS]:
-        for k,v in self.data[CONFIG_HOOKS].items():
+        for k, v in self.data[CONFIG_HOOKS].items():
             lifecycle = v['lifecycle']
             if isinstance(lifecycle, str):
                 lifecycle = [lifecycle]
-            output_hooks.append({"name": k, "descripition": v['description'], "lifecycle": lifecycle})
+            output_hooks.append({"name": k, "description": v['description'], "lifecycle": lifecycle})
         return output_hooks
 
     @property

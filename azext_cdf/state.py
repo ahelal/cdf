@@ -4,7 +4,7 @@ import semver
 from knack.util import CLIError
 from knack.log import get_logger
 from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load
-from azext_cdf.VERSION import VERSION
+from azext_cdf.version import version
 
 STATE_PHASE_UNKNOWN = "unknown"
 STATE_PHASE_GOING_UP = "transitioning_up"
@@ -48,7 +48,7 @@ class State(object):
                 STATE_LASTUPDATE: self.timestamp(),
                 STATE_STATUS: -1,
                 STATE_EVENTS: [],
-                STATE_VERSION: VERSION,
+                STATE_VERSION: version,
                 STATE_STORE: {},
                 STATE_HOOKS_RESULT: {},
                 STATE_RESOURCE_GROUP: None,
@@ -88,11 +88,11 @@ class State(object):
 
     def _version_compare(self):
         state_version = self.state_db['version']
-        version_compare = semver.compare(state_version, VERSION)
+        version_compare = semver.compare(state_version, version)
         if version_compare == -1: # state is less then cli
-            logger.warning(f'Your state file is out date: state version {state_version} CDF version {VERSION}. Run `up -r` to rewrite state')
+            logger.warning(f'Your state file is out date: state version {state_version} CDF version {version}. Run `up -r` to rewrite state')
         elif version_compare == 1: # state is more then cli
-            logger.warning(f'Your CDF extension is outdate: state version {state_version} CLI version {VERSION}. Updgrade extension')
+            logger.warning(f'Your CDF extension is outdate: state version {state_version} CLI version {version}. Upgrade extension')
         elif version_compare == 0: # state is less then cli
             pass
 
@@ -148,10 +148,10 @@ class State(object):
             self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_RESOURCES] = resources
         self._flush_state(flush)
 
-    def set_hook_state(self, hook, op, op_data, flush=True):
-        if not self.state_db[STATE_HOOKS_RESULT][hook].get(op, False):
-            self.state_db[STATE_HOOKS_RESULT][hook][op] = {}
-        self.state_db[STATE_HOOKS_RESULT][hook][op] = {**self.state_db[STATE_HOOKS_RESULT][hook][op], **op_data}        
+    def set_hook_state(self, hook, op_name, op_data, flush=True):
+        if not self.state_db[STATE_HOOKS_RESULT][hook].get(op_name, False):
+            self.state_db[STATE_HOOKS_RESULT][hook][op_name] = {}
+        self.state_db[STATE_HOOKS_RESULT][hook][op_name] = {**self.state_db[STATE_HOOKS_RESULT][hook][op_name], **op_data}
         self._flush_state(flush)
 
     def store_get(self, key, value):
@@ -178,7 +178,7 @@ class State(object):
             "ResourceGroup": self.state_db[STATE_RESOURCE_GROUP],
             "Status": last_status_event["status"],
             "StatusMessage": last_status_event["msg"],
-            "Version": self.state_db['version'],
+            "version": self.state_db['version'],
         }
         return return_status
 
