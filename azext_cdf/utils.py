@@ -4,9 +4,9 @@ import os
 import glob
 import json
 import shutil
-import yaml
 from os import access, R_OK
 from json import JSONDecodeError
+import yaml
 from knack.log import get_logger
 from knack.util import CLIError
 
@@ -89,7 +89,7 @@ def json_load(content):
     try:
         return json.loads(content)
     except JSONDecodeError as error:
-        raise CLIError(f"Failed to parse JSON content. Error: {str(error)}")
+        raise CLIError(f"Failed to parse JSON content. Error: {str(error)}") from error
 
 
 def read_param_file(filepath):
@@ -108,7 +108,7 @@ def read_param_file(filepath):
     try:  # try yaml
         config_dict = yaml.safe_load(data)
         return param_dict, False
-    except:
+    except Exception:
         pass
 
     try:  # try key_value
@@ -119,8 +119,8 @@ def read_param_file(filepath):
                 raise CLIError(f"Failed to read parameter file '{filepath}'. Error: Parameter file is not 'json', 'yaml' or key value")
             config_dict[key.strip()] = value.strip()
         return param_dict, False
-    except:
-        raise CLIError(f"Failed to read parameter file '{filepath}'. Error: Parameter file is not 'json', 'yaml' or key value")
+    except Exception as error:
+        raise CLIError(f"Failed to read parameter file '{filepath}'. Error: Parameter file is not 'json', 'yaml' or key value") from error
 
 
 def is_equal_or_in(value1, value2):
@@ -145,13 +145,13 @@ def find_the_right_file(config_up_file, provisioner_name, file_extension, config
     up_file = ""
     if config_up_file:
         up_file = config_up_file
-        logger.debug("Using {} file from up argument {}.".format(provisioner_name, up_file))
+        logger.debug("Using %s file from up argument %s.", provisioner_name, up_file)
     else:
         for filename in glob.glob(f"{config_dir}/*{file_extension}"):
             if len(up_file) > 0:
                 raise CLIError(f"Found more then one {file_extension} file. Please configure 'up' option.")
             up_file = filename
-            logger.debug("Using {} file from globing {}.".format(provisioner_name, up_file))
+            logger.debug("Using %s file from globing %s.", provisioner_name, up_file)
 
     if not up_file:
         raise CLIError(f"Can't find {file_extension} file. Please configure 'up' option.")

@@ -161,7 +161,7 @@ def _check_deployment_error(cmd, resource_group_name, deployment_name, deploymen
 
 def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None):
     cobj = _init_config(config, remove_tmp, working_dir)
-    cobj.state.transitionToPhase(STATE_PHASE_GOING_DOWN)
+    cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
     try:
         if cobj.provisioner == "bicep":
@@ -180,8 +180,8 @@ def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None)
         if "failed to be deleted" not in str(error):
             raise error from error
 
-    cobj.state.setResult(outputs={}, resources={}, flush=True)
-    cobj.state.completedPhase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
+    cobj.state.set_result(outputs={}, resources={}, flush=True)
+    cobj.state.completed_phase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
     run_hook_lifecycle(cobj, LIFECYCLE_POST_DOWN)
 
 
@@ -210,7 +210,7 @@ def _down_bicep(cmd, cobj):
 def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None):
     # pylint: disable=unused-argument
     cobj = _init_config(config, remove_tmp, working_dir)
-    cobj.state.transitionToPhase(STATE_PHASE_GOING_UP)
+    cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
     # Run pre up life cycle
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
     # Run template interpolite
@@ -237,6 +237,6 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
         cobj.state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
         raise
 
-    cobj.state.setResult(outputs=outputs, resources=output_resources, flush=True)
-    cobj.state.completedPhase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
+    cobj.state.set_result(outputs=outputs, resources=output_resources, flush=True)
+    cobj.state.completed_phase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
     run_hook_lifecycle(cobj, LIFECYCLE_POST_UP)

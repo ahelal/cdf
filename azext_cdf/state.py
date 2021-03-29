@@ -1,3 +1,5 @@
+''' Handeling the state file '''
+
 from copy import deepcopy
 from datetime import datetime
 import semver
@@ -31,14 +33,15 @@ STATE_UP_RESULT = "result"
 STATE_UP_RESULT_OUTPUTS = "outputs"
 STATE_UP_RESULT_RESOURCES = "resources"
 STATE_HOOKS_RESULT = "hooks"
-STATE_HOOKS_RESULT = "hooks"
 STATE_VERSION = "version"
 STATE_STORE = "store"
 
 logger = get_logger(__name__)
 
 
-class State(object):
+class State():
+    ''' The state class '''
+
     def __init__(self, state_file, name, config_hooks):
         self.state_file = state_file
         self.config_hooks = config_hooks
@@ -46,7 +49,7 @@ class State(object):
             self.state_db = {
                 STATE_DEPLOYMENT_NAME: name,
                 STATE_PHASE: STATE_PHASE_UNKNOWN,
-                STATE_LASTUPDATE: self.timestamp(),
+                STATE_LASTUPDATE: self._timestamp(),
                 STATE_STATUS: -1,
                 STATE_EVENTS: [],
                 STATE_VERSION: version,
@@ -68,11 +71,11 @@ class State(object):
 
         if not self.state_db[STATE_DEPLOYMENT_NAME] == name:
             raise CLIError("state error seems you have changed the deployment name to '{}', the state has this deployment name: {}".format(self.state_db[STATE_DEPLOYMENT_NAME], name))
-        # resource_group
         self._version_compare()
         self._setup_hooks_reference()
 
     def check_resource_group(self, resource_group):
+        ''' Check if resource group is mapping to state else raise an error'''
         # Check resource group
         if resource_group == self.state_db[STATE_RESOURCE_GROUP]:
             pass
@@ -85,12 +88,13 @@ class State(object):
             raise CLIError("Resource group already provisioned '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP]))
 
     def _version_compare(self):
+        ''' Check if state version '''
         state_version = self.state_db["version"]
         version_compare = semver.compare(state_version, version)
         if version_compare == -1:  # state is less then cli
-            logger.warning(f"Your state file is out date: state version {state_version} CDF version {version}. Run `up -r` to rewrite state")
+            logger.warning("Your state file is out date: state version %s CDF version %s. Run `up -r` to rewrite state", state_version, version)
         elif version_compare == 1:  # state is more then cli
-            logger.warning(f"Your CDF extension is outdate: state version {state_version} CLI version {version}. Upgrade extension")
+            logger.warning("Your CDF extension is outdate: state version %s CLI version %s. Upgrade extension", state_version, version)
         elif version_compare == 0:  # state is less then cli
             pass
 
@@ -119,10 +123,10 @@ class State(object):
         if flush:
             json_write_to_file(self.state_file, self.state_db)
 
-    def transitionToPhase(self, phase):
+    def transition_to_phase(self, phase):
         self.add_event(f"Transitioning to {phase}", phase=phase, status=STATE_STATUS_PENDING, flush=True)
 
-    def completedPhase(self, phase, status, msg=""):
+    def completed_phase(self, phase, status, msg=""):
         if status == STATE_STATUS_SUCCESS:
             self.add_event(f"Successfully reached {phase}. { msg }", phase=phase, status=STATE_STATUS_SUCCESS, flush=True)
         elif status == STATE_STATUS_ERROR:
@@ -131,15 +135,17 @@ class State(object):
             self.add_event(f"Failed during {phase}. { msg }", status=STATE_STATUS_FAILED, flush=True)
 
     def add_event(self, msg, status=None, phase=None, hook=None, flush=True):
+        ''' Add an event to the events state '''
+
         if phase:
             self.state_db[STATE_PHASE] = phase
-        event = {"timestamp": self.timestamp(), "phase": self.state_db[STATE_PHASE], "msg": msg, "status": status, "hook": hook}
+        event = {"timestamp": self._timestamp(), "phase": self.state_db[STATE_PHASE], "msg": msg, "status": status, "hook": hook}
         self.state_db[STATE_EVENTS].append(event)
         if status:
             self.state_db[STATE_STATUS] = len(self.state_db[STATE_EVENTS]) - 1
         self._flush_state(flush)
 
-    def setResult(self, outputs=None, resources=None, flush=True):
+    def set_result(self, outputs=None, resources=None, flush=True):
         if resources:
             self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_OUTPUTS] = outputs
         if outputs:
@@ -153,6 +159,7 @@ class State(object):
         self._flush_state(flush)
 
     def store_get(self, key, value):
+        ''' Get variable from store in state'''
         try:
             return self.state_db[STATE_STORE][key]
         except KeyError:
@@ -160,7 +167,8 @@ class State(object):
             return value
 
     @staticmethod
-    def timestamp():
+    def _timestamp():
+        ''' Current timestamp '''
         # utc='%H:%M:%S %d/%m/%Y-%Z'
         # return datetime.utcnow().strftime(utc)
         local = "%H:%M:%S %d/%m/%Y"
@@ -182,6 +190,7 @@ class State(object):
 
     @property
     def events(self):
+        ''' Return the events in the state file '''
         return_events = []
         for event in reversed(self.state_db[STATE_EVENTS]):
             return_events.append(
@@ -197,12 +206,15 @@ class State(object):
 
     @property
     def result_up(self):
+        ''' Return the result dict (output and resources)'''
         return self.state_db[STATE_UP_RESULT]
 
     @property
     def result_hooks(self):
+        ''' Return the results for all hooks'''
         return self.state_db[STATE_HOOKS_RESULT]
 
     @property
     def state(self):
+        ''' Return the state dict '''
         return self.state_db
