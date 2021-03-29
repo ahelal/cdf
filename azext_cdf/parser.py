@@ -1,12 +1,12 @@
-''' Configuration module'''
+""" Configuration module"""
 
 import os
 import platform
 import yaml
 
 from knack.util import CLIError
-from schema import Schema, And,Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
-from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction,Template
+from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
+from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction, Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError
 from azext_cdf.version import version
 from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname
@@ -15,34 +15,35 @@ from azext_cdf.state import State
 FIRST_PHASE = 1
 SECOND_PHASE = 2
 # Runtime vars
-RUNTIME_ENV_KEY = 'env'
-RUNTIME_RESULT = 'result'
-RUNTIME_RESULT_OUTPUTS = 'outputs'
-RUNTIME_RESULT_RESOURCES = 'resources'
-RUNTIME_HOOKS= 'hooks'
-RUNTIME_RUN_ONCE_KEY  = 'once'
+RUNTIME_ENV_KEY = "env"
+RUNTIME_RESULT = "result"
+RUNTIME_RESULT_OUTPUTS = "outputs"
+RUNTIME_RESULT_RESOURCES = "resources"
+RUNTIME_HOOKS = "hooks"
+RUNTIME_RUN_ONCE_KEY = "once"
 RUNTIME_RUN_ONCE = "_ONCE_ONCE_"
 # Config
-CONFIG_NAME = 'name'
-CONFIG_RG = 'resource_group'
-CONFIG_RG_MANAGED = 'manage_resource_group'
-CONFIG_LOCATION = 'location'
-CONFIG_SUPPORTED_PROVISIONERS = ('bicep') #('bicep', 'terraform')
-CONFIG_PROVISIONER = 'provisioner'
-CONFIG_SCOPE = 'scope'
-CONFIG_TMP = 'temp_dir'
-CONFIG_UP = 'up'
-CONFIG_VARS = 'vars'
-CONFIG_PARAMS = 'params'
-CONFIG_STATE_FILE = 'state'
-CONFIG_HOOKS = 'hooks'
-CONFIG_DEPLOYMENT_COMPLETE = 'complete_deployment'
-CONFIG_STATE_FILE_DEFAULT = '{{ cdf.tmp_dir }}/state.json'
-LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN  = "pre-up", "post-up", "pre-down","post-down"
-LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL =  "pre-test","post-test", ""
-CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN,LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
+CONFIG_NAME = "name"
+CONFIG_RG = "resource_group"
+CONFIG_RG_MANAGED = "manage_resource_group"
+CONFIG_LOCATION = "location"
+CONFIG_SUPPORTED_PROVISIONERS = "bicep"  # ('bicep', 'terraform')
+CONFIG_PROVISIONER = "provisioner"
+CONFIG_SCOPE = "scope"
+CONFIG_TMP = "temp_dir"
+CONFIG_UP = "up"
+CONFIG_VARS = "vars"
+CONFIG_PARAMS = "params"
+CONFIG_STATE_FILE = "state"
+CONFIG_HOOKS = "hooks"
+CONFIG_DEPLOYMENT_COMPLETE = "complete_deployment"
+CONFIG_STATE_FILE_DEFAULT = "{{ cdf.tmp_dir }}/state.json"
+LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN = "pre-up", "post-up", "pre-down", "post-down"
+LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL = "pre-test", "post-test", ""
+CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN, LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
 CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
-CONFIG_SUPPORTED_OPS_TYPES = ('az', 'cmd', "print", "call", "script") #('bicep', 'arm',  'api', 'rest', "terraform")
+CONFIG_SUPPORTED_OPS_TYPES = ("az", "cmd", "print", "call", "script")  # ('bicep', 'arm',  'api', 'rest', "terraform")
+
 
 def include_file(name):
     try:
@@ -50,6 +51,7 @@ def include_file(name):
             return in_file.read()
     except Exception as error:
         raise CLIError(f"include_file filter argument '{name}' error. {str(error)}") from error
+
 
 @contextfunction
 def template_file(ctx, name):
@@ -61,6 +63,7 @@ def template_file(ctx, name):
         raise CLIError(f"template_file filter argument '{name}' error. {str(error)}") from error
     return data
 
+
 class ConfigParser:
     def __init__(self, config, remove_tmp=False):
         self.data = {}
@@ -71,18 +74,17 @@ class ConfigParser:
         # https://github.com/keleshev/schema
         hooks_schema = {
             str: {
-                "ops": [{
-                    Optional("name"):  str,
-                    Optional("description"): str,
-                    Optional("type", default="az"): And(str, Use(str.lower),
-                        lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
-                    Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))),
-                        lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
-                    Optional("interactive", default=False): bool,
-                    "args": Or(str,list),
-                }],
-                Optional("lifecycle", default=""): Or(And(str, Use(str.lower), (And(list))),
-                    lambda s: is_part_of(s, CONFIG_SUPPORTED_LIFECYCLE)),
+                "ops": [
+                    {
+                        Optional("name"): str,
+                        Optional("description"): str,
+                        Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
+                        Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
+                        Optional("interactive", default=False): bool,
+                        "args": Or(str, list),
+                    }
+                ],
+                Optional("lifecycle", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_LIFECYCLE)),
                 Optional("description", default=""): str,
                 Optional("run_if", default="true"): str,
             }
@@ -91,22 +93,22 @@ class ConfigParser:
             CONFIG_NAME: And(str, len),
             CONFIG_RG: And(str, len),
             CONFIG_LOCATION: And(str, len),
-            Optional(CONFIG_SCOPE, default='resource_group'): And(str, len),
+            Optional(CONFIG_SCOPE, default="resource_group"): And(str, len),
             Optional(CONFIG_RG_MANAGED, default=True): bool,
-            Optional(CONFIG_PROVISIONER, default='bicep'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
+            Optional(CONFIG_PROVISIONER, default="bicep"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
             Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
             Optional(CONFIG_UP, default=None): And(str, len),
-            Optional(CONFIG_TMP, default='{{cdf.config_dir}}/.cdf_tmp'): And(str, len),
+            Optional(CONFIG_TMP, default="{{cdf.config_dir}}/.cdf_tmp"): And(str, len),
             # Optional('vars_file', default=[]): Or(str,list),
             Optional(CONFIG_VARS, default={}): dict,
             Optional(CONFIG_PARAMS, default={}): dict,
             Optional(CONFIG_HOOKS, default={}): hooks_schema,
-            Optional(CONFIG_STATE_FILE, default=CONFIG_STATE_FILE_DEFAULT) : str ,
+            Optional(CONFIG_STATE_FILE, default=CONFIG_STATE_FILE_DEFAULT): str,
         }
         self._load_validate()
         self.jinja_env = Environment(loader=BaseLoader, undefined=StrictUndefined)
-        self.jinja_env.globals['include_file'] = include_file
-        self.jinja_env.globals['template_file'] = template_file
+        self.jinja_env.globals["include_file"] = include_file
+        self.jinja_env.globals["template_file"] = template_file
         self._delayed_vars = []
         # First phase
         self._setup_first_phase_interpolation()
@@ -130,11 +132,11 @@ class ConfigParser:
 
     def _validate_hooks(self):
         for hook_name, hook_value in self.data[CONFIG_HOOKS].items():
-            if hook_name[0] == '_':
+            if hook_name[0] == "_":
                 raise CLIError(f"Hook names '{hook_name}' can't start with '_'")
             for operation in hook_value.get("ops"):
                 op_name = operation.get("name", " ")
-                if op_name[0] == '_':
+                if op_name[0] == "_":
                     raise CLIError(f"op names '{op_name}' can't start with '_'")
 
     @staticmethod
@@ -147,10 +149,9 @@ class ConfigParser:
         except FileNotFoundError as error:
             raise CLIError(f"Config file '{filepath}' file not found:': {str(error)}") from error
 
-
     def _setup_first_phase_interpolation(self):
         self.first_phase_vars = {
-            "cdf":{
+            "cdf": {
                 "version": version,
                 "config_dir": real_dirname(self._config),
                 "platform": platform.system().lower(),
@@ -165,9 +166,9 @@ class ConfigParser:
                 try:
                     self.first_phase_vars[CONFIG_VARS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config '{key}':'{value}'")
                 except CLIError as error:
-                    if 'result' in str(error):
+                    if "result" in str(error):
                         self._delayed_vars.append(key)
-                    elif 'store' in str(error):
+                    elif "store" in str(error):
                         self._delayed_vars.append(key)
                     else:
                         raise
@@ -179,14 +180,14 @@ class ConfigParser:
         dir_create(self.data[CONFIG_TMP])
         self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE], f"key {CONFIG_STATE_FILE}")
         self.data[CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
-        self.state = State(self.data[CONFIG_STATE_FILE], self.data[CONFIG_NAME], self.hooks_ops) # initialize state
-        self.jinja_env.globals['store'] = self.state.store_get
+        self.state = State(self.data[CONFIG_STATE_FILE], self.data[CONFIG_NAME], self.hooks_ops)  # initialize state
+        self.jinja_env.globals["store"] = self.state.store_get
         self.data[CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
-        self.first_phase_vars['cdf']['resource_group'] = self.data[CONFIG_RG]
+        self.first_phase_vars["cdf"]["resource_group"] = self.data[CONFIG_RG]
         self.data[CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
-        self.first_phase_vars['cdf']['location'] = self.data[CONFIG_RG]
+        self.first_phase_vars["cdf"]["location"] = self.data[CONFIG_RG]
         self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP], f"key {CONFIG_UP}")
-        self.state.check_resource_group(self.data[CONFIG_RG]) # check resource group with state
+        self.state.check_resource_group(self.data[CONFIG_RG])  # check resource group with state
 
     def _setup_second_phase_variables(self):
         self.second_phase_vars = {
@@ -194,7 +195,7 @@ class ConfigParser:
                 RUNTIME_RESULT_OUTPUTS: {},
                 RUNTIME_RESULT_RESOURCES: {},
             },
-            RUNTIME_HOOKS: self.hooks_ops
+            RUNTIME_HOOKS: self.hooks_ops,
         }
 
     def _interpolate_object(self, phase, template, variables=None):
@@ -284,7 +285,7 @@ class ConfigParser:
 
     @property
     def provisioner(self):
-        return self.data['provisioner']
+        return self.data["provisioner"]
 
     @property
     def config(self):
@@ -303,10 +304,10 @@ class ConfigParser:
         output_hooks = []
         # if self.data[CONFIG_HOOKS]:
         for k, v in self.data[CONFIG_HOOKS].items():
-            lifecycle = v['lifecycle']
+            lifecycle = v["lifecycle"]
             if isinstance(lifecycle, str):
                 lifecycle = [lifecycle]
-            output_hooks.append({"name": k, "description": v['description'], "lifecycle": lifecycle})
+            output_hooks.append({"name": k, "description": v["description"], "lifecycle": lifecycle})
         return output_hooks
 
     @property
@@ -317,7 +318,7 @@ class ConfigParser:
 
         for hook_k, hook_v in self.data[CONFIG_HOOKS].items():
             output_hooks[hook_k] = {}
-            for op in hook_v['ops']:
+            for op in hook_v["ops"]:
                 op_name = op.get("name", False)
                 if op_name:
                     if op_name in output_hooks[hook_k]:

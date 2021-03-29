@@ -1,4 +1,4 @@
-''' Handle hooks execution '''
+""" Handle hooks execution """
 
 import os
 import stat
@@ -12,6 +12,7 @@ from azext_cdf.provisioner import run_command
 
 logger = get_logger(__name__)
 RECURSION_LIMIT = 5
+
 
 def run_hook_lifecycle(cobj, event):
     """
@@ -41,14 +42,11 @@ def evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
     Returns:
         boolean if condition was evaluated correctly.
     """
-    run_if = cobj.interpolate(phase=SECOND_PHASE,
-                              template=hook_object['run_if'],
-                              extra_vars=extra_vars,
-                              context=f"condition evaluation for hook '{hook_name}'")
+    run_if = cobj.interpolate(phase=SECOND_PHASE, template=hook_object["run_if"], extra_vars=extra_vars, context=f"condition evaluation for hook '{hook_name}'")
     run_if = run_if.strip()
-    if run_if.lower() in ['true', '1', 't', 'y', 'yes']:
+    if run_if.lower() in ["true", "1", "t", "y", "yes"]:
         return True
-    elif run_if.lower() in ['false', '0', 'f', 'n', 'no']:
+    elif run_if.lower() in ["false", "0", "f", "n", "no"]:
         return False
     elif RUNTIME_RUN_ONCE in run_if:
         condition = cobj.state.result_hooks[hook_name].get("_condition", {})
@@ -56,6 +54,7 @@ def evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
         return not ran
 
     raise CLIError("A known boolean evaluation of condition hook '{}' expression '{}'".format(run_if, hook_name))
+
 
 def run_hook(cobj, hook_args):
     """
@@ -75,10 +74,11 @@ def run_hook(cobj, hook_args):
             cobj.state.add_event("Skipping running hook, condition evaluted to false", hook=hook_name, flush=True)
             return
         cobj.state.add_event("Finished running hook", hook=hook_name, flush=True)
-        cobj.state.set_hook_state(hook_name, '_condition', {"ran": True}, flush=True)
+        cobj.state.set_hook_state(hook_name, "_condition", {"ran": True}, flush=True)
     except CLIError as error:
         cobj.state.add_event(f"Error during hook execution {str(error)}", hook=hook_name, flush=True)
         raise
+
 
 def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     hook_name = hook_args[0]
@@ -97,42 +97,41 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     except KeyError as error:
         raise CLIError(f"Unknown hook name '{hook_name}'.\n{str(error)}") from error
 
-    for operation in hook['ops']:
+    for operation in hook["ops"]:
         operation_num += 1
         ops_name = operation.get("name", operation.get("description", f"#{operation_num}"))
-        if is_equal_or_in("", operation['platform']):
-            pass # all platforms
-        elif is_equal_or_in(cobj.platform, operation['platform']):
-            pass # my platfrom
+        if is_equal_or_in("", operation["platform"]):
+            pass  # all platforms
+        elif is_equal_or_in(cobj.platform, operation["platform"]):
+            pass  # my platfrom
         else:
-            continue # Skip
+            continue  # Skip
 
-        op_args = cobj.interpolate(phase=SECOND_PHASE,
-                                   template=operation['args'],
-                                   extra_vars=extra_vars,
-                                   context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
+        op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], extra_vars=extra_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
         interactive = operation.get("interactive", False)
-        if operation['type'] == "az":
+        if operation["type"] == "az":
             stdout, stderr = _run_az(hook_name, ops_name, op_args)
-        elif operation['type'] == "cmd":
+        elif operation["type"] == "cmd":
             stdout, stderr = _run_cmd(hook_name, ops_name, op_args, interactive)
-        elif operation['type'] == "script":
+        elif operation["type"] == "script":
             stdout, stderr = _run_script(hook_name, ops_name, op_args, hook_args[1:], cobj)
-        elif operation['type'] == "print":
+        elif operation["type"] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args)
-        elif operation['type'] == "call":
-            _run_hook(cobj, [op_args], recursion_n +1, extra_vars=extra_vars)
+        elif operation["type"] == "call":
+            _run_hook(cobj, [op_args], recursion_n + 1, extra_vars=extra_vars)
             stdout, stderr = "", ""
 
         if operation.get("name", False):
-            cobj.state.set_hook_state(hook=hook_name, op=operation['name'], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
+            cobj.state.set_hook_state(hook=hook_name, op=operation["name"], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
             cobj.updateHooksResult(cobj.state.result_hooks)
         return True
+
 
 def _run_print(hook_name, ops_name, op_args):
     stdout = f"Print {hook_name} | {ops_name}\n{op_args}"
     print(stdout)
     return stdout, ""
+
 
 def _run_cmd(hook_name, ops_name, op_args, interactive=False):
     if isinstance(op_args, str):
@@ -142,6 +141,7 @@ def _run_cmd(hook_name, ops_name, op_args, interactive=False):
     except Exception as error:
         raise CLIError(f"Failed during cmd execution in op '{ops_name}' in hook '{hook_name}'.\n{str(error)}") from error
 
+
 def _run_az(hook_name, ops_name, op_args):
     if isinstance(op_args, str):
         op_args = shlex.split(op_args)
@@ -149,6 +149,7 @@ def _run_az(hook_name, ops_name, op_args):
         return run_command("az", op_args)
     except Exception as error:
         raise CLIError(f"Failed during AZ execution in op '{ops_name}' in hook '{hook_name}'.\n{str(error)}") from error
+
 
 def _run_script(hook_name, ops_name, op_args, hook_args, cobj):
     if isinstance(op_args, str):
@@ -159,6 +160,6 @@ def _run_script(hook_name, ops_name, op_args, hook_args, cobj):
     content = cobj.interpolate(SECOND_PHASE, content, f"Interplating script op {op_args[0]}")
     file_write_content(target_file, content)
     # os.chmod(target_file, stat.st_mode | stat.S_IEXEC) # make file exec
-    os.chmod(target_file, stat.S_IRUSR | stat.S_IEXEC | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH) # make file exec
+    os.chmod(target_file, stat.S_IRUSR | stat.S_IEXEC | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)  # make file exec
     op_args[0] = target_file
     return _run_cmd(hook_name, ops_name, op_args, hook_args)

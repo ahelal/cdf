@@ -37,6 +37,7 @@ STATE_STORE = "store"
 
 logger = get_logger(__name__)
 
+
 class State(object):
     def __init__(self, state_file, name, config_hooks):
         self.state_file = state_file
@@ -44,7 +45,7 @@ class State(object):
         if not file_exits(self.state_file):
             self.state_db = {
                 STATE_DEPLOYMENT_NAME: name,
-                STATE_PHASE : STATE_PHASE_UNKNOWN,
+                STATE_PHASE: STATE_PHASE_UNKNOWN,
                 STATE_LASTUPDATE: self.timestamp(),
                 STATE_STATUS: -1,
                 STATE_EVENTS: [],
@@ -52,10 +53,7 @@ class State(object):
                 STATE_STORE: {},
                 STATE_HOOKS_RESULT: {},
                 STATE_RESOURCE_GROUP: None,
-                STATE_UP_RESULT: {
-                    STATE_UP_RESULT_OUTPUTS: {},
-                    STATE_UP_RESULT_RESOURCES: {}
-                }
+                STATE_UP_RESULT: {STATE_UP_RESULT_OUTPUTS: {}, STATE_UP_RESULT_RESOURCES: {}},
             }
             self._setup_hooks_reference()
             self.add_event("Created state file", status=STATE_STATUS_UNKNOWN, flush=True)
@@ -87,13 +85,13 @@ class State(object):
             raise CLIError("Resource group already provisioned '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP]))
 
     def _version_compare(self):
-        state_version = self.state_db['version']
+        state_version = self.state_db["version"]
         version_compare = semver.compare(state_version, version)
-        if version_compare == -1: # state is less then cli
-            logger.warning(f'Your state file is out date: state version {state_version} CDF version {version}. Run `up -r` to rewrite state')
-        elif version_compare == 1: # state is more then cli
-            logger.warning(f'Your CDF extension is outdate: state version {state_version} CLI version {version}. Upgrade extension')
-        elif version_compare == 0: # state is less then cli
+        if version_compare == -1:  # state is less then cli
+            logger.warning(f"Your state file is out date: state version {state_version} CDF version {version}. Run `up -r` to rewrite state")
+        elif version_compare == 1:  # state is more then cli
+            logger.warning(f"Your CDF extension is outdate: state version {state_version} CLI version {version}. Upgrade extension")
+        elif version_compare == 0:  # state is less then cli
             pass
 
     def _setup_hooks_reference(self):
@@ -103,11 +101,11 @@ class State(object):
             if state_hook in self.config_hooks:
                 for state_op in current_state_db_hooks[state_hook]:
                     if state_op[0] == "_":
-                        pass # ignore _
+                        pass  # ignore _
                     elif not state_op in self.config_hooks[state_hook]:
                         self.state_db[STATE_HOOKS_RESULT][state_hook].pop(state_op)
             else:
-                self.state_db[STATE_HOOKS_RESULT].pop(state_hook) #remove hook outdate
+                self.state_db[STATE_HOOKS_RESULT].pop(state_hook)  # remove hook outdate
 
         # hooks/ops in config db but not config_db
         for config_hook in self.config_hooks:
@@ -138,7 +136,7 @@ class State(object):
         event = {"timestamp": self.timestamp(), "phase": self.state_db[STATE_PHASE], "msg": msg, "status": status, "hook": hook}
         self.state_db[STATE_EVENTS].append(event)
         if status:
-            self.state_db[STATE_STATUS] = len(self.state_db[STATE_EVENTS]) -1
+            self.state_db[STATE_STATUS] = len(self.state_db[STATE_EVENTS]) - 1
         self._flush_state(flush)
 
     def setResult(self, outputs=None, resources=None, flush=True):
@@ -165,7 +163,7 @@ class State(object):
     def timestamp():
         # utc='%H:%M:%S %d/%m/%Y-%Z'
         # return datetime.utcnow().strftime(utc)
-        local = '%H:%M:%S %d/%m/%Y'
+        local = "%H:%M:%S %d/%m/%Y"
         return datetime.now().strftime(local)
 
     @property
@@ -178,7 +176,7 @@ class State(object):
             "ResourceGroup": self.state_db[STATE_RESOURCE_GROUP],
             "Status": last_status_event["status"],
             "StatusMessage": last_status_event["msg"],
-            "version": self.state_db['version'],
+            "version": self.state_db["version"],
         }
         return return_status
 
@@ -186,13 +184,15 @@ class State(object):
     def events(self):
         return_events = []
         for event in reversed(self.state_db[STATE_EVENTS]):
-            return_events.append({
-                "Timestamp": event["timestamp"],
-                "Phase": event["phase"],
-                "Message": event["msg"],
-                "Status": event["status"],
-                "Hook": event["hook"],
-            })
+            return_events.append(
+                {
+                    "Timestamp": event["timestamp"],
+                    "Phase": event["phase"],
+                    "Message": event["msg"],
+                    "Status": event["status"],
+                    "Hook": event["hook"],
+                }
+            )
         return return_events
 
     @property
