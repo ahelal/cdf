@@ -85,7 +85,7 @@ class State():
         elif self.state_db[STATE_PHASE] == STATE_PHASE_UNKNOWN or self.state_db[STATE_PHASE] == STATE_PHASE_DOWN:
             pass
         else:
-            raise CLIError("Resource group already provisioned '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP]))
+            raise CLIError("Resource group already provisioned '{}' requested '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP],resource_group))
 
     def _version_compare(self):
         ''' Check if state version '''

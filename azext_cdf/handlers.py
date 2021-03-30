@@ -4,6 +4,7 @@ import sys
 from collections import OrderedDict
 from knack.util import CLIError
 from knack.log import get_logger
+import azure.cli.core.commands.progress as progress
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, get_deployment_at_resource_group, delete_resource
 from azure.cli.command_modules.resource.custom import run_bicep_command
 from azure.cli.core.util import user_confirmation
@@ -20,7 +21,7 @@ from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DO
 from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR #, STATE_STATUS_FAILED
 from azext_cdf.provisioner import run_bicep
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 CONFIG_DEFAULT = ".cdf.yml"
 
@@ -35,6 +36,16 @@ def _init_config(config, remove_tmp=False, working_dir=None):
 def test_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
     # pylint: disable=unused-argument
     # TODO
+    # p = progress.ProgressReporter(message="Hello")
+    import time
+    v = progress.get_progress_view()
+    controller = progress.ProgressHook()
+    controller.init_progress(v)
+    controller.begin(message="Starting hook")
+    time.sleep(4)
+    controller.end(message="Fished hook")
+    time.sleep(1)
+    
     pass
 
 
@@ -48,7 +59,7 @@ def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working
 def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, confirm=False):
     # pylint: disable=unused-argument
     cobj = _init_config(config, False, working_dir)
-    if hook_args:
+    if not hook_args:
         return cobj.hook_table
 
     hook_name = hook_args[0]  # hook is the first arg
@@ -93,12 +104,14 @@ def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
 
 
 def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+    ''' Dump the configuration file '''
     # pylint: disable=unused-argument
     cobj = _init_config(config, False, working_dir)
     return cobj.config
 
 
 def debug_state_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+    ''' Dump the state file '''
     # pylint: disable=unused-argument
     cobj = _init_config(config, False, working_dir)
     return cobj.state.state
@@ -213,8 +226,8 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
     cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
     # Run pre up life cycle
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
-    # Run template interpolite
-    cobj.preUpInterpolite()
+    # Run template interpolate
+    cobj.delayed_up_Interpolite()
     try:
         if cobj.provisioner == "bicep":
             output_resources, outputs = run_bicep(

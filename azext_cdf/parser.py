@@ -9,7 +9,7 @@ from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKey
 from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction, Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError
 from azext_cdf.version import version
-from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname
+from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname, random_string
 from azext_cdf.state import State
 
 FIRST_PHASE = 1
@@ -43,7 +43,7 @@ LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL = "pre-test", "post-test"
 CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN, LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
 CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
 CONFIG_SUPPORTED_OPS_TYPES = ("az", "cmd", "print", "call", "script")  # ('bicep', 'arm',  'api', 'rest', "terraform")
-
+CONFIG_SUPPORTED_OPS_MODE = ('wait', "interactive")
 
 def include_file(name):
     try:
@@ -80,7 +80,7 @@ class ConfigParser:
                         Optional("description"): str,
                         Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
                         Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
-                        Optional("interactive", default=False): bool,
+                        Optional("mode", default='wait'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_MODE),
                         "args": Or(str, list),
                     }
                 ],
@@ -109,6 +109,8 @@ class ConfigParser:
         self.jinja_env = Environment(loader=BaseLoader, undefined=StrictUndefined)
         self.jinja_env.globals["include_file"] = include_file
         self.jinja_env.globals["template_file"] = template_file
+        self.jinja_env.globals["random_string"] = random_string
+        self._quick_delayed_vars = []
         self._delayed_vars = []
         # First phase
         self._setup_first_phase_interpolation()
@@ -162,16 +164,8 @@ class ConfigParser:
             RUNTIME_RUN_ONCE_KEY: RUNTIME_RUN_ONCE,
         }
         if CONFIG_VARS in self.data:
-            for key, value in self.data[CONFIG_VARS].items():
-                try:
-                    self.first_phase_vars[CONFIG_VARS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config '{key}':'{value}'")
-                except CLIError as error:
-                    if "result" in str(error):
-                        self._delayed_vars.append(key)
-                    elif "store" in str(error):
-                        self._delayed_vars.append(key)
-                    else:
-                        raise
+            self._lazy_variable_resolve(allow_undefined=True)
+            # self._lazy_variable_resolve(allow_undefined=False)
         self.data[CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], f"key {CONFIG_TMP}")
         self.first_phase_vars["cdf"]["tmp_dir"] = self.data[CONFIG_TMP]
         # remove and create tmp dir incase we will download some stuff for templates
@@ -182,6 +176,8 @@ class ConfigParser:
         self.data[CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
         self.state = State(self.data[CONFIG_STATE_FILE], self.data[CONFIG_NAME], self.hooks_ops)  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get
+        for k in self._quick_delayed_vars:
+            self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in quick delayed interpolate '{k}'")
         self.data[CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
         self.first_phase_vars["cdf"]["resource_group"] = self.data[CONFIG_RG]
         self.data[CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
@@ -197,6 +193,27 @@ class ConfigParser:
             },
             RUNTIME_HOOKS: self.hooks_ops,
         }
+
+    def _lazy_variable_resolve(self, allow_undefined=False):
+        if CONFIG_VARS in self.data:
+            for key, value in self.data[CONFIG_VARS].items():
+                context = f"variables in config '{key}':'{value}'"
+                try:
+                    self.first_phase_vars[CONFIG_VARS][key] = self.interpolate(FIRST_PHASE, value, context, raw_undefined_error=allow_undefined)
+                except UndefinedError as error:
+                    if "result" in str(error):
+                        self._delayed_vars.append(key)
+                    elif "store" in str(error):
+                        self._quick_delayed_vars.append(key)
+                    else:
+                        real_error = True
+                        for delayed_var in self._quick_delayed_vars:
+                            if any(delayed_var in err for err in error.args):
+                                self._quick_delayed_vars.append(key)
+                                real_error = False
+                                continue
+                        if real_error:
+                            raise CLIError(f"config interpolation error. {context}, undefined lazy variable: {str(error)}") from error
 
     def _interpolate_object(self, phase, template, variables=None):
         if isinstance(template, str):
@@ -226,15 +243,16 @@ class ConfigParser:
 
     def delayed_variable_interpolite(self):
         for k in self._delayed_vars:
-            self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in preUpInterpolite '{k}'")
+            self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in delayed interpolate '{k}'")
 
-    def preUpInterpolite(self):
+    def delayed_up_Interpolite(self):
+        ''' '''
         self.delayed_variable_interpolite()
         if CONFIG_PARAMS in self.data:
             for v, k in self.data[CONFIG_PARAMS].items():
-                self.data[CONFIG_PARAMS][v] = self.interpolate(FIRST_PHASE, k, f"variables in config in preUpInterpolite '{k}'")
+                self.data[CONFIG_PARAMS][v] = self.interpolate(FIRST_PHASE, k, f"variables in config in delayed interpolate '{k}'")
 
-    def interpolate(self, phase, template, context=None, extra_vars=None):
+    def interpolate(self, phase, template, context=None, extra_vars=None, raw_undefined_error=False):
         if template is None:
             return None
         if phase == FIRST_PHASE:
@@ -255,9 +273,11 @@ class ConfigParser:
         # except TypeError as e:
         #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
         except UndefinedError as error:
-            raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(error)}") from error
+            if raw_undefined_error:
+                raise
+            raise CLIError(f"config interpolation error. {error_context}, undefined variable: {str(error)}") from error
         except TemplateSyntaxError as error:
-            raise CLIError(f"config interpolation error. {error_context}, template syntax : {str(error)}") from error
+            raise CLIError(f"config interpolation error. {error_context}, template syntax: {str(error)}") from error
 
     @property
     def name(self):

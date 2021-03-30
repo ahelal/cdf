@@ -10,7 +10,8 @@ from azext_cdf.utils import is_equal_or_in, file_read_content, file_write_conten
 from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE, RUNTIME_RUN_ONCE
 from azext_cdf.provisioner import run_command
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
+
 RECURSION_LIMIT = 5
 
 
@@ -24,9 +25,10 @@ def run_hook_lifecycle(cobj, event):
 
     Returns: None
     """
-    for hook in cobj.data[CONFIG_HOOKS]:
-        if is_equal_or_in(event, cobj.data[CONFIG_HOOKS][hook]["lifecycle"]):
-            run_hook(cobj, [hook])
+    for hook_name in cobj.data[CONFIG_HOOKS]:
+        if is_equal_or_in(event, cobj.data[CONFIG_HOOKS][hook_name]["lifecycle"]):
+            _logger.info("Hook event:%s triggered for hook:%s", event, hook_name)
+            run_hook(cobj, [hook_name])
 
 
 def evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
@@ -84,14 +86,14 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     hook_name = hook_args[0]
     operation_num = 0
     hook = cobj.data[CONFIG_HOOKS][hook_name]
+    _logger.info("Running hook:%s, Args:%s", hook_name, hook_args)
     if not evaluate_condition(cobj, hook_name, hook, extra_vars):
-        logger.debug("Condition for hook {} evaluted to false".format(hook_name))
+        _logger.debug("Condition for hook %s evaluted to false", hook_name)
         return False
 
     if recursion_n > RECURSION_LIMIT:
         raise CLIError(f"Call recursion limit reached {recursion_n - 1}")
 
-    logger.info(f"Entering hook {hook_name} and hook_args {hook_args}")
     try:
         hook = cobj.data[CONFIG_HOOKS][hook_name]
     except KeyError as error:
@@ -105,10 +107,14 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
         elif is_equal_or_in(cobj.platform, operation["platform"]):
             pass  # my platfrom
         else:
+            _logger.info("Skipping due platform. My platform '%s' limiting platform '%s'", cobj.platform, operation["platform"])
             continue  # Skip
 
         op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], extra_vars=extra_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
-        interactive = operation.get("interactive", False)
+        mode = operation.get("mode")
+        interactive = False
+        if mode == "interactive":
+            interactive = True
         if operation["type"] == "az":
             stdout, stderr = _run_az(hook_name, ops_name, op_args)
         elif operation["type"] == "cmd":
@@ -124,13 +130,13 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
         if operation.get("name", False):
             cobj.state.set_hook_state(hook=hook_name, op=operation["name"], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
             cobj.updateHooksResult(cobj.state.result_hooks)
-        return True
+    return True
 
 
 def _run_print(hook_name, ops_name, op_args):
-    stdout = f"Print {hook_name} | {ops_name}\n{op_args}"
-    print(stdout)
-    return stdout, ""
+    _logger.info(f"Print {hook_name} | {ops_name}")
+    print(op_args)
+    return op_args, ""
 
 
 def _run_cmd(hook_name, ops_name, op_args, interactive=False):
@@ -157,9 +163,8 @@ def _run_script(hook_name, ops_name, op_args, hook_args, cobj):
     filename = op_args[0]
     target_file = f"{cobj.tmp_dir}/{os.path.basename(filename)}"
     content = file_read_content(op_args[0])
-    content = cobj.interpolate(SECOND_PHASE, content, f"Interplating script op {op_args[0]}")
+    content = cobj.interpolate(SECOND_PHASE, content, f"interpolating script op {op_args[0]}")
     file_write_content(target_file, content)
-    # os.chmod(target_file, stat.st_mode | stat.S_IEXEC) # make file exec
     os.chmod(target_file, stat.S_IRUSR | stat.S_IEXEC | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)  # make file exec
     op_args[0] = target_file
     return _run_cmd(hook_name, ops_name, op_args, hook_args)

@@ -10,6 +10,13 @@ short-summary: Commands to manage CDF https://github.com/ahelal/cdf
 """
 
 helps[
+    "cdf debug"
+] = """
+type: group
+short-summary: Commands to help you debug your CDF deployment.
+"""
+
+helps[
     "cdf up"
 ] = """
 type: command
@@ -24,10 +31,10 @@ short-summary: Destroy an environment.
 """
 
 helps[
-    "cdf hooks"
+    "cdf hook"
 ] = """
 type: command
-short-summary: Run a specific hook.
+short-summary: Manage CDF hooks.
 """
 
 helps[
@@ -49,4 +56,39 @@ helps[
 ] = """
 type: command
 short-summary: Create the cdf directory structure.
+"""
+
+helps[
+    "cdf debug interpolate"
+] = """
+type: command
+short-summary: Run an interactive session to test/debug your jinja2 expressions.
+"""
+
+helps[
+    "cdf debug version"
+] = """
+type: command
+short-summary: Version of CDF.
+"""
+
+helps[
+    "cdf debug config"
+] = """
+type: command
+short-summary: Dump the configuration file.
+"""
+
+helps[
+    "cdf debug deployment-errors"
+] = """
+type: command
+short-summary: Check deployment error and all nested deployments.
+"""
+
+helps[
+    "cdf debug result"
+] = """
+type: command
+short-summary: Print out results.
 """

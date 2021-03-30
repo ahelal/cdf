@@ -3,6 +3,8 @@
 import os
 import glob
 import json
+import random
+import string
 import shutil
 from os import access, R_OK
 from json import JSONDecodeError
@@ -131,14 +133,16 @@ def is_equal_or_in(value1, value2):
     elif isinstance(value2, str):
         return value1 == value2
 
+    raise CLIError(f"unsupported date type '{type(value2)}', {value2}")
+
 
 def is_part_of(item, valid_list):
     if isinstance(item, list):
         return set(item) <= set(valid_list)
     elif isinstance(item, str):
         return item in valid_list
-
-    raise CLIError(f"unsupported date type '{type(item)}', {item}")
+    else:
+        raise CLIError(f"unsupported date type '{type(item)}', {item}")
 
 
 def find_the_right_file(config_up_file, provisioner_name, file_extension, config_dir):
@@ -157,3 +161,19 @@ def find_the_right_file(config_up_file, provisioner_name, file_extension, config
         raise CLIError(f"Can't find {file_extension} file. Please configure 'up' option.")
 
     return up_file
+
+def random_string(length, option=['lower','upper']):
+    ''' Create a random string of a given length '''
+
+    letters = ""
+    if "upper" in option or "all" in option:
+        letters += string.ascii_uppercase
+    if "lower" in option or "all" in option:
+        letters += string.ascii_lowercase
+    if "numbers" in option or "all" in option:
+        letters += string.digits
+    if "special" in option or "all" in option:
+        letters += string.digits
+    if not letters:
+        raise CLIError("random_string function requires option supported(all, upper, lower and special)")
+    return ''.join(random.choice(letters) for i in range(length))
