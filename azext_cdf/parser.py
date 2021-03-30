@@ -30,7 +30,7 @@ CONFIG_LOCATION = "location"
 CONFIG_SUPPORTED_PROVISIONERS = "bicep"  # ('bicep', 'terraform')
 CONFIG_PROVISIONER = "provisioner"
 CONFIG_SCOPE = "scope"
-CONFIG_TMP = "temp_dir"
+CONFIG_TMP = "tmp_dir"
 CONFIG_UP = "up"
 CONFIG_VARS = "vars"
 CONFIG_PARAMS = "params"
@@ -163,27 +163,23 @@ class ConfigParser:
             CONFIG_PARAMS: {},
             RUNTIME_RUN_ONCE_KEY: RUNTIME_RUN_ONCE,
         }
+
         if CONFIG_VARS in self.data:
             self._lazy_variable_resolve(allow_undefined=True)
-            # self._lazy_variable_resolve(allow_undefined=False)
-        self.data[CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], f"key {CONFIG_TMP}")
-        self.first_phase_vars["cdf"]["tmp_dir"] = self.data[CONFIG_TMP]
-        # remove and create tmp dir incase we will download some stuff for templates
-        if self._remove_tmp:
-            dir_remove(self.data[CONFIG_TMP])
-        dir_create(self.data[CONFIG_TMP])
-        self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE], f"key {CONFIG_STATE_FILE}")
-        self.data[CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
-        self.state = State(self.data[CONFIG_STATE_FILE], self.data[CONFIG_NAME], self.hooks_ops)  # initialize state
+        self.first_phase_vars["cdf"][CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], context=f"key {CONFIG_TMP}")
+        if self._remove_tmp: # remove and create tmp dir incase we will download some stuff for templates
+            dir_remove(self.tmp_dir)
+        dir_create(self.tmp_dir)
+        self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE], context=f"key {CONFIG_STATE_FILE}")
+        self.first_phase_vars["cdf"][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
+        self.state = State(self.data[CONFIG_STATE_FILE], self.name, self.hooks_ops)  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get
         for k in self._quick_delayed_vars:
             self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in quick delayed interpolate '{k}'")
-        self.data[CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
-        self.first_phase_vars["cdf"]["resource_group"] = self.data[CONFIG_RG]
-        self.data[CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
-        self.first_phase_vars["cdf"]["location"] = self.data[CONFIG_RG]
+        self.first_phase_vars["cdf"][CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
+        self.first_phase_vars["cdf"][CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
         self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP], f"key {CONFIG_UP}")
-        self.state.check_resource_group(self.data[CONFIG_RG])  # check resource group with state
+        self.state.check_resource_group(self.resource_group_name)  # check resource group with state
 
     def _setup_second_phase_variables(self):
         self.second_phase_vars = {
@@ -281,11 +277,11 @@ class ConfigParser:
 
     @property
     def name(self):
-        return self.data[CONFIG_NAME]
+        return self.first_phase_vars["cdf"][CONFIG_NAME]
 
     @property
     def resource_group_name(self):
-        return self.data[CONFIG_RG]
+        return self.first_phase_vars["cdf"][CONFIG_RG]
 
     @property
     def managed_resource(self):
@@ -293,11 +289,11 @@ class ConfigParser:
 
     @property
     def location(self):
-        return self.data[CONFIG_LOCATION]
+        return self.first_phase_vars["cdf"][CONFIG_LOCATION]
 
     @property
     def tmp_dir(self):
-        return self.data[CONFIG_TMP]
+        return self.first_phase_vars["cdf"][CONFIG_TMP]
 
     @property
     def up_file(self):

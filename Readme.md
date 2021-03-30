@@ -96,11 +96,13 @@ Standard jinja2 expressions are support https://jinja.palletsprojects.com/en/2.1
 #### Built in variables
 
 * `env` to access environment variable. i.e. `{{ env['HOME'] }}` home directory in *nix
+* `cdf.name` CDF deployment name
 * `cdf.version` CDF version 
 * `cdf.tmp_dir` CDF template directory path 
 * `cdf.config_dir` CDF configuration directory path. path to `.cdf.yml` directory
 * `cdf.resource_group` interpolated resource group 
 * `cdf.platform` platform client machine is running i.e. Darwin, Linux, Windows
+* `cdf.location` CDF Azure's Location 
 
 ### Filters
 
