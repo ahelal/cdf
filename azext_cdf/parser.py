@@ -36,6 +36,7 @@ CONFIG_VARS = "vars"
 CONFIG_PARAMS = "params"
 CONFIG_STATE_FILE = "state"
 CONFIG_HOOKS = "hooks"
+CONFIG_CDF = "cdf"
 CONFIG_DEPLOYMENT_COMPLETE = "complete_deployment"
 CONFIG_STATE_FILE_DEFAULT = "{{ cdf.tmp_dir }}/state.json"
 LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN = "pre-up", "post-up", "pre-down", "post-down"
@@ -110,14 +111,13 @@ class ConfigParser:
         self.jinja_env.globals["include_file"] = include_file
         self.jinja_env.globals["template_file"] = template_file
         self.jinja_env.globals["random_string"] = random_string
-        self._quick_delayed_vars = []
         self._delayed_vars = []
         # First phase
         self._setup_first_phase_interpolation()
         # Second phase
         self._setup_second_phase_variables()
         self._update_result(self.state.result_up)
-        self.updateHooksResult(self.state.result_hooks)
+        self.update_hooks_result(self.state.result_hooks)
 
     def _load_validate(self):
         self.data = self._read_config(self._config)
@@ -144,8 +144,8 @@ class ConfigParser:
     @staticmethod
     def _read_config(filepath):
         try:
-            with open(filepath) as f:
-                return yaml.load(f, Loader=yaml.FullLoader)
+            with open(filepath) as file_in:
+                return yaml.load(file_in, Loader=yaml.FullLoader)
         except yaml.parser.ParserError as error:
             raise CLIError(f"Config file '{filepath}' yaml parser error:': {str(error)}") from error
         except FileNotFoundError as error:
@@ -153,7 +153,7 @@ class ConfigParser:
 
     def _setup_first_phase_interpolation(self):
         self.first_phase_vars = {
-            "cdf": {
+            CONFIG_CDF: {
                 "version": version,
                 "config_dir": real_dirname(self._config),
                 "platform": platform.system().lower(),
@@ -164,22 +164,26 @@ class ConfigParser:
             RUNTIME_RUN_ONCE_KEY: RUNTIME_RUN_ONCE,
         }
 
-        if CONFIG_VARS in self.data:
-            self._lazy_variable_resolve(allow_undefined=True)
-        self.first_phase_vars["cdf"][CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], context=f"key {CONFIG_TMP}")
+        self.first_phase_vars[CONFIG_CDF][CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], context=f"key {CONFIG_TMP}")
         if self._remove_tmp: # remove and create tmp dir incase we will download some stuff for templates
             dir_remove(self.tmp_dir)
         dir_create(self.tmp_dir)
         self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE], context=f"key {CONFIG_STATE_FILE}")
-        self.first_phase_vars["cdf"][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
-        self.state = State(self.data[CONFIG_STATE_FILE], self.name, self.hooks_ops)  # initialize state
+        self.state = State(self.data[CONFIG_STATE_FILE])  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get
-        for k in self._quick_delayed_vars:
-            self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in quick delayed interpolate '{k}'")
-        self.first_phase_vars["cdf"][CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
-        self.first_phase_vars["cdf"][CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
+
+        self.first_phase_vars[CONFIG_CDF][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
+        if CONFIG_VARS in self.data:
+            self._lazy_variable_resolve()
+
+        self.first_phase_vars[CONFIG_CDF][CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
+        self.first_phase_vars[CONFIG_CDF][CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
         self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP], f"key {CONFIG_UP}")
-        self.state.check_resource_group(self.resource_group_name)  # check resource group with state
+        # setup state
+        self.state.setup(deployment_name=self.name,
+                         resource_group=self.resource_group_name,
+                         config_hooks=self.hooks_ops)
+
 
     def _setup_second_phase_variables(self):
         self.second_phase_vars = {
@@ -190,26 +194,16 @@ class ConfigParser:
             RUNTIME_HOOKS: self.hooks_ops,
         }
 
-    def _lazy_variable_resolve(self, allow_undefined=False):
-        if CONFIG_VARS in self.data:
-            for key, value in self.data[CONFIG_VARS].items():
-                context = f"variables in config '{key}':'{value}'"
-                try:
-                    self.first_phase_vars[CONFIG_VARS][key] = self.interpolate(FIRST_PHASE, value, context, raw_undefined_error=allow_undefined)
-                except UndefinedError as error:
-                    if "result" in str(error):
-                        self._delayed_vars.append(key)
-                    elif "store" in str(error):
-                        self._quick_delayed_vars.append(key)
-                    else:
-                        real_error = True
-                        for delayed_var in self._quick_delayed_vars:
-                            if any(delayed_var in err for err in error.args):
-                                self._quick_delayed_vars.append(key)
-                                real_error = False
-                                continue
-                        if real_error:
-                            raise CLIError(f"config interpolation error. {context}, undefined lazy variable: {str(error)}") from error
+    def _lazy_variable_resolve(self):
+        for key, value in self.data[CONFIG_VARS].items():
+            try:
+                self.first_phase_vars[CONFIG_VARS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config '{key}':'{value}'", raw_undefined_error=True)
+            except UndefinedError as error:
+                if "result" in str(error):
+                    self._delayed_vars.append(key)
+                else:
+                    raise
+
 
     def _interpolate_object(self, phase, template, variables=None):
         if isinstance(template, str):
@@ -231,7 +225,7 @@ class ConfigParser:
         template_string = self.jinja_env.from_string(string)
         return template_string.render(variables)
 
-    def updateHooksResult(self, hooks_output):
+    def update_hooks_result(self, hooks_output):
         self.second_phase_vars[RUNTIME_HOOKS] = hooks_output
 
     def _update_result(self, result):
@@ -241,7 +235,7 @@ class ConfigParser:
         for k in self._delayed_vars:
             self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in delayed interpolate '{k}'")
 
-    def delayed_up_Interpolite(self):
+    def delayed_up_interpolite(self):
         ''' '''
         self.delayed_variable_interpolite()
         if CONFIG_PARAMS in self.data:
@@ -277,11 +271,11 @@ class ConfigParser:
 
     @property
     def name(self):
-        return self.first_phase_vars["cdf"][CONFIG_NAME]
+        return self.first_phase_vars[CONFIG_CDF][CONFIG_NAME]
 
     @property
     def resource_group_name(self):
-        return self.first_phase_vars["cdf"][CONFIG_RG]
+        return self.first_phase_vars[CONFIG_CDF][CONFIG_RG]
 
     @property
     def managed_resource(self):
@@ -289,11 +283,11 @@ class ConfigParser:
 
     @property
     def location(self):
-        return self.first_phase_vars["cdf"][CONFIG_LOCATION]
+        return self.first_phase_vars[CONFIG_CDF][CONFIG_LOCATION]
 
     @property
     def tmp_dir(self):
-        return self.first_phase_vars["cdf"][CONFIG_TMP]
+        return self.first_phase_vars[CONFIG_CDF][CONFIG_TMP]
 
     @property
     def up_file(self):
@@ -348,11 +342,11 @@ class ConfigParser:
 
     @property
     def platform(self):
-        return self.first_phase_vars["cdf"]["platform"]
+        return self.first_phase_vars[CONFIG_CDF]["platform"]
 
     @property
     def config_dir(self):
-        return self.first_phase_vars["cdf"]["config_dir"]
+        return self.first_phase_vars[CONFIG_CDF]["config_dir"]
 
     @property
     def deployment_mode(self):

@@ -42,50 +42,59 @@ logger = get_logger(__name__)
 class State():
     ''' The state class '''
 
-    def __init__(self, state_file, name, config_hooks):
+    def __init__(self, state_file):
         self.state_file = state_file
-        self.config_hooks = config_hooks
-        if not file_exits(self.state_file):
-            self.state_db = {
-                STATE_DEPLOYMENT_NAME: name,
-                STATE_PHASE: STATE_PHASE_UNKNOWN,
-                STATE_LASTUPDATE: self._timestamp(),
-                STATE_STATUS: -1,
-                STATE_EVENTS: [],
-                STATE_VERSION: version,
-                STATE_STORE: {},
-                STATE_HOOKS_RESULT: {},
-                STATE_RESOURCE_GROUP: None,
-                STATE_UP_RESULT: {STATE_UP_RESULT_OUTPUTS: {}, STATE_UP_RESULT_RESOURCES: {}},
-            }
-            self._setup_hooks_reference()
-            self.add_event("Created state file", status=STATE_STATUS_UNKNOWN, flush=True)
+        self.config_hooks = None
+        if file_exits(self.state_file):
+            # state file exists
+            try:
+                state_str = file_read_content(self.state_file)
+                self.state_db = json_load(state_str)
+            except CLIError as error:
+                raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
             return
-
-        # state file exists
-        try:
-            state_str = file_read_content(self.state_file)
-            self.state_db = json_load(state_str)
-        except CLIError as error:
-            raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
-
-        if not self.state_db[STATE_DEPLOYMENT_NAME] == name:
-            raise CLIError("state error seems you have changed the deployment name to '{}', the state has this deployment name: {}".format(self.state_db[STATE_DEPLOYMENT_NAME], name))
-        self._version_compare()
+        # New state file
+        self.state_db = {
+            STATE_DEPLOYMENT_NAME: None,
+            STATE_PHASE: STATE_PHASE_UNKNOWN,
+            STATE_LASTUPDATE: self._timestamp(),
+            STATE_STATUS: -1,
+            STATE_EVENTS: [],
+            STATE_VERSION: version,
+            STATE_STORE: {},
+            STATE_HOOKS_RESULT: {},
+            STATE_RESOURCE_GROUP: None,
+            STATE_UP_RESULT: {STATE_UP_RESULT_OUTPUTS: {}, STATE_UP_RESULT_RESOURCES: {}},
+        }
         self._setup_hooks_reference()
+        self.add_event("Created a state file", status=STATE_STATUS_UNKNOWN, flush=True)
 
-    def check_resource_group(self, resource_group):
+
+    def setup(self, deployment_name, resource_group, config_hooks):
         ''' Check if resource group is mapping to state else raise an error'''
-        # Check resource group
-        if resource_group == self.state_db[STATE_RESOURCE_GROUP]:
-            pass
-        elif self.state_db[STATE_RESOURCE_GROUP] is None:
+
+        self.config_hooks = config_hooks
+
+        if self.state_db[STATE_RESOURCE_GROUP] is None:
             self.state_db[STATE_RESOURCE_GROUP] = resource_group
-            self._flush_state()
+        elif resource_group == self.state_db[STATE_RESOURCE_GROUP]:
+            pass
         elif self.state_db[STATE_PHASE] == STATE_PHASE_UNKNOWN or self.state_db[STATE_PHASE] == STATE_PHASE_DOWN:
             pass
         else:
             raise CLIError("Resource group already provisioned '{}' requested '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP],resource_group))
+
+        if self.state_db[STATE_DEPLOYMENT_NAME] is None:
+            self.state_db[STATE_DEPLOYMENT_NAME] = deployment_name
+        elif self.state_db[STATE_DEPLOYMENT_NAME] == deployment_name:
+            pass
+        elif self.state_db[STATE_PHASE] == STATE_PHASE_UNKNOWN or self.state_db[STATE_PHASE] == STATE_PHASE_DOWN:
+            pass
+        else:
+            raise CLIError("state error seems you have changed the deployment name to '{}', the state has this deployment name: {}".format(self.state_db[STATE_DEPLOYMENT_NAME], deployment_name))
+        self._version_compare()
+        self._setup_hooks_reference()
+        self._flush_state()
 
     def _version_compare(self):
         ''' Check if state version '''
@@ -112,6 +121,8 @@ class State():
                 self.state_db[STATE_HOOKS_RESULT].pop(state_hook)  # remove hook outdate
 
         # hooks/ops in config db but not config_db
+        if not self.config_hooks:
+            return 
         for config_hook in self.config_hooks:
             if not config_hook in self.state_db[STATE_HOOKS_RESULT]:
                 self.state_db[STATE_HOOKS_RESULT][config_hook] = {}

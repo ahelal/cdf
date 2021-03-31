@@ -129,7 +129,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
 
         if operation.get("name", False):
             cobj.state.set_hook_state(hook=hook_name, op=operation["name"], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
-            cobj.updateHooksResult(cobj.state.result_hooks)
+            cobj.update_hooks_result(cobj.state.result_hooks)
     return True
 
 

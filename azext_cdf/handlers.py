@@ -45,9 +45,6 @@ def test_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
     time.sleep(4)
     controller.end(message="Fished hook")
     time.sleep(1)
-    
-    pass
-
 
 def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None):
     # pylint: disable=unused-argument
@@ -227,7 +224,7 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
     # Run pre up life cycle
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
     # Run template interpolate
-    cobj.delayed_up_Interpolite()
+    cobj.delayed_up_interpolite()
     try:
         if cobj.provisioner == "bicep":
             output_resources, outputs = run_bicep(
