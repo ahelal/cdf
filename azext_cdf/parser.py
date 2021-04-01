@@ -82,6 +82,7 @@ class ConfigParser:
                         Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
                         Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
                         Optional("mode", default='wait'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_MODE),
+                        Optional("cwd", default=None): str,
                         "args": Or(str, list),
                     }
                 ],
@@ -239,8 +240,8 @@ class ConfigParser:
         ''' '''
         self.delayed_variable_interpolite()
         if CONFIG_PARAMS in self.data:
-            for v, k in self.data[CONFIG_PARAMS].items():
-                self.data[CONFIG_PARAMS][v] = self.interpolate(FIRST_PHASE, k, f"variables in config in delayed interpolate '{k}'")
+            for key, value in self.data[CONFIG_PARAMS].items():
+                self.data[CONFIG_PARAMS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config in delayed interpolate '{value}'")
 
     def interpolate(self, phase, template, context=None, extra_vars=None, raw_undefined_error=False):
         if template is None:

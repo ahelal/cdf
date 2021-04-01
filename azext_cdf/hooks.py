@@ -31,33 +31,6 @@ def run_hook_lifecycle(cobj, event):
             run_hook(cobj, [hook_name])
 
 
-def evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
-    """
-    Evalute a jinja2 expression and returns a boolean
-
-    Args:
-        cobj: Config object.
-        hook_name: string hook name
-        hook_object: The hook object being evaluated.
-        extra_vars: An optional dictionary of variables.
-
-    Returns:
-        boolean if condition was evaluated correctly.
-    """
-    run_if = cobj.interpolate(phase=SECOND_PHASE, template=hook_object["run_if"], extra_vars=extra_vars, context=f"condition evaluation for hook '{hook_name}'")
-    run_if = run_if.strip()
-    if run_if.lower() in ["true", "1", "t", "y", "yes"]:
-        return True
-    elif run_if.lower() in ["false", "0", "f", "n", "no"]:
-        return False
-    elif RUNTIME_RUN_ONCE in run_if:
-        condition = cobj.state.result_hooks[hook_name].get("_condition", {})
-        ran = condition.get("ran", False)
-        return not ran
-
-    raise CLIError("A known boolean evaluation of condition hook '{}' expression '{}'".format(run_if, hook_name))
-
-
 def run_hook(cobj, hook_args):
     """
     Loop through defined hooks and run all hooks attached to event.
@@ -87,7 +60,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     operation_num = 0
     hook = cobj.data[CONFIG_HOOKS][hook_name]
     _logger.info("Running hook:%s, Args:%s", hook_name, hook_args)
-    if not evaluate_condition(cobj, hook_name, hook, extra_vars):
+    if not _evaluate_condition(cobj, hook_name, hook, extra_vars):
         _logger.debug("Condition for hook %s evaluted to false", hook_name)
         return False
 
@@ -112,15 +85,16 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
 
         op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], extra_vars=extra_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
         mode = operation.get("mode")
+        op_cwd = cobj.interpolate(phase=SECOND_PHASE, template=operation.get("cwd", None), extra_vars=extra_vars, context=f"az-cli cwd interpolation '{ops_name}' in hook '{hook_name}'")
         interactive = False
         if mode == "interactive":
             interactive = True
         if operation["type"] == "az":
-            stdout, stderr = _run_az(hook_name, ops_name, op_args)
+            stdout, stderr = _run_az(hook_name, ops_name, op_args, cwd=op_cwd)
         elif operation["type"] == "cmd":
-            stdout, stderr = _run_cmd(hook_name, ops_name, op_args, interactive)
+            stdout, stderr = _run_cmd(hook_name, ops_name, op_args, interactive, cwd=op_cwd)
         elif operation["type"] == "script":
-            stdout, stderr = _run_script(hook_name, ops_name, op_args, hook_args[1:], cobj)
+            stdout, stderr = _run_script(hook_name, ops_name, op_args, hook_args[1:], cobj, cwd=op_cwd)
         elif operation["type"] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args)
         elif operation["type"] == "call":
@@ -134,30 +108,30 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
 
 
 def _run_print(hook_name, ops_name, op_args):
-    _logger.info(f"Print {hook_name} | {ops_name}")
+    _logger.info("Print %s | %s", hook_name, ops_name)
     print(op_args)
     return op_args, ""
 
 
-def _run_cmd(hook_name, ops_name, op_args, interactive=False):
+def _run_cmd(hook_name, ops_name, op_args, interactive=False, cwd=None):
     if isinstance(op_args, str):
         op_args = shlex.split(op_args)
     try:
-        return run_command(op_args[0], op_args[1:], interactive=interactive)
+        return run_command(op_args[0], op_args[1:], interactive=interactive, cwd=cwd)
     except Exception as error:
         raise CLIError(f"Failed during cmd execution in op '{ops_name}' in hook '{hook_name}'.\n{str(error)}") from error
 
 
-def _run_az(hook_name, ops_name, op_args):
+def _run_az(hook_name, ops_name, op_args, cwd):
     if isinstance(op_args, str):
         op_args = shlex.split(op_args)
     try:
-        return run_command("az", op_args)
+        return run_command("az", op_args, cwd=cwd)
     except Exception as error:
         raise CLIError(f"Failed during AZ execution in op '{ops_name}' in hook '{hook_name}'.\n{str(error)}") from error
 
 
-def _run_script(hook_name, ops_name, op_args, hook_args, cobj):
+def _run_script(hook_name, ops_name, op_args, hook_args, cobj, cwd):
     if isinstance(op_args, str):
         op_args = shlex.split(op_args)
     filename = op_args[0]
@@ -167,4 +141,30 @@ def _run_script(hook_name, ops_name, op_args, hook_args, cobj):
     file_write_content(target_file, content)
     os.chmod(target_file, stat.S_IRUSR | stat.S_IEXEC | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)  # make file exec
     op_args[0] = target_file
-    return _run_cmd(hook_name, ops_name, op_args, hook_args)
+    return _run_cmd(hook_name, ops_name, op_args, hook_args, cwd=cwd)
+
+def _evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
+    """
+    Evalute a jinja2 expression and returns a boolean
+
+    Args:
+        cobj: Config object.
+        hook_name: string hook name
+        hook_object: The hook object being evaluated.
+        extra_vars: An optional dictionary of variables.
+
+    Returns:
+        boolean if condition was evaluated correctly.
+    """
+    run_if = cobj.interpolate(phase=SECOND_PHASE, template=hook_object["run_if"], extra_vars=extra_vars, context=f"condition evaluation for hook '{hook_name}'")
+    run_if = run_if.strip()
+    if run_if.lower() in ["true", "1", "t", "y", "yes"]:
+        return True
+    elif run_if.lower() in ["false", "0", "f", "n", "no"]:
+        return False
+    elif RUNTIME_RUN_ONCE in run_if:
+        condition = cobj.state.result_hooks[hook_name].get("_condition", {})
+        ran = condition.get("ran", False)
+        return not ran
+
+    raise CLIError("A known boolean evaluation of condition hook '{}' expression '{}'".format(run_if, hook_name))
