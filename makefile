@@ -3,7 +3,7 @@ VENV := venv
 #
 EXTENTION_NAME := cdf
 # default target, when make executed without arguments
-all: source-venv
+# all: source-venv
 
 source-venv: $(VENV)/bin/activate
 
@@ -11,7 +11,7 @@ venv:
 	python3 -m venv $(VENV)
 	pip3 install -r dev-requirements.txt
 
-build: source-venv clean
+build: clean
 	python3 setup.py bdist_wheel
 
 uninstall: 
