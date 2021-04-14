@@ -19,7 +19,7 @@ from azext_cdf.utils import json_write_to_file, find_the_right_file, dir_change_
 from azext_cdf.hooks import run_hook, run_hook_lifecycle
 from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN # STATE_PHASE_TESTED, STATE_PHASE_TESTING,
 from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR #, STATE_STATUS_FAILED
-from azext_cdf.provisioner import run_bicep
+from azext_cdf.provisioner import run_bicep, run_arm_deployment
 
 _logger = get_logger(__name__)
 
@@ -174,7 +174,7 @@ def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None)
     cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
     try:
-        if cobj.provisioner == "bicep":
+        if cobj.provisioner == "bicep" or cobj.provisioner == "arm":
             _down_bicep(cmd, cobj)
     except CLIError as error:
         cobj.state.add_event(f"Errored during down phase: {str(error)}", STATE_STATUS_ERROR)
@@ -232,6 +232,18 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
                 deployment_name=cobj.name,
                 bicep_file=find_the_right_file(cobj.up_file, "bicep", "*.bicep", cobj.config_dir),
                 tmp_dir=cobj.tmp_dir,
+                resource_group=cobj.resource_group_name,
+                location=cobj.location,
+                params=cobj.data[CONFIG_PARAMS],
+                manage_resource_group=cobj.managed_resource,
+                no_prompt=False,
+                complete_deployment=cobj.deployment_mode,
+            )
+        elif cobj.provisioner == "arm":
+            output_resources, outputs =  run_arm_deployment(
+                cmd,
+                deployment_name=cobj.name,
+                arm_template_file=find_the_right_file(cobj.up_file, "arm", "*.json", cobj.config_dir),
                 resource_group=cobj.resource_group_name,
                 location=cobj.location,
                 params=cobj.data[CONFIG_PARAMS],

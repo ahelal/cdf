@@ -15,6 +15,7 @@ def run_command(bin_path, args=[], interactive=False, cwd=None):
     stderr = None
     try:
         cmd_args = [rf"{bin_path}"] + args
+        _logger.debug(" Running a command %s", cmd_args)
         if interactive:
             subprocess.check_call(cmd_args, cwd=cwd)
             return "", ""
