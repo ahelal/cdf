@@ -20,15 +20,15 @@ To uninstall the extension run `make uninstall`
 CDF uses a yaml based confutation file
 
 ```yaml
-# Required, string, templatable. "Deployment name. Can't be changed after provisioning"
+# Required, string, simple templatable. "Deployment name. Can't be changed after provisioning"
 name: deployment_name
-# Required, string, templatable. "The default resource group to deploy to"
+# Required, string, simple templatable. "The default resource group to deploy to"
 resource_group: my_rg
 # Optional, bool, not templatable, defaults to 'true'. "Create RG if it does not exist and delete on down"
 manage_resource_group: true
-# Required, string, templatable. "The default location to deploy to"
+# Required, string, simple templatable. "The default location to deploy to"
 location: 'eastus'
-# Optional, string, templatable. "Only support resource_group for now"
+# Optional, string, not templatable. "Only support resource_group for now"
 scope: "resource_group"
 # Optional, bool, not templatable. "Do a complete or incremental deployment"
 complete_deployment: true
@@ -37,9 +37,9 @@ provisioner: 'bicep'
 # Optional, string, templatable defaults to *.bicep file in the same dir as `.cdf.yml` . "main Bicep file used for provisioning"
 up: file.bicep
 
-# Optional, string, templatable defaults to '{{CONFIG_DIR}}/.cdf_tmp'. "Temp directory needed to store CDF state and json files"
+# Optional, string, simple templatable defaults to '{{CONFIG_DIR}}/.cdf_tmp'. "Temp directory needed to store CDF state and json files"
 temp_dir: '{{CONFIG_DIR}}/.cdf_tmp'
-# Optional, string, templatable defaults to '{{CDF_TMP_DIR}}/state.json'. "CDF state file"
+# Optional, string, simple templatable defaults to '{{CDF_TMP_DIR}}/state.json'. "CDF state file"
 state: '{{ CDF_TMP_DIR }}/state.json'
 
 # optional, object, templatable defaults to {}. "Parameters that will be passed on to the provisioner"
@@ -135,10 +135,10 @@ Check the examples https://github.com/ahelal/cdf-examples
 ## TODO
 
 * add jinja2 test to check dir, file , and filter for json/yaml
-* Refactor to remove access to state directly and use config 
 * Tests :)
 * Support terraform
 * Implement test handler and test lifecycle
 * Implement generic rest interface 
+* Status should attempt to reconcile with ARM and update real status
 * Check if a deployment is running and connect instead of redeploying or deleting
 * HTTP get filter in jinja2

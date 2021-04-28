@@ -26,14 +26,14 @@ _logger = get_logger(__name__)
 CONFIG_DEFAULT = ".cdf.yml"
 
 
-def _init_config(config, remove_tmp=False, working_dir=None):
+def _init_config(config, remove_tmp=False, working_dir=None, state_file=None):
     if working_dir:
         dir_change_working(working_dir)
-    cobj = ConfigParser(config, remove_tmp)
+    cobj = ConfigParser(config, remove_tmp, state_file)
     return cobj
 
 
-def test_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+def test_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     # pylint: disable=unused-argument
     # TODO
     # p = progress.ProgressReporter(message="Hello")
@@ -46,16 +46,16 @@ def test_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
     controller.end(message="Fished hook")
     time.sleep(1)
 
-def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None):
+def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None, state_file=None):
     # pylint: disable=unused-argument
     # cobj = _init_config(config, False, working_dir)
     # TODO
     pass
 
 
-def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, confirm=False):
+def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, confirm=False, state_file=None):
     # pylint: disable=unused-argument
-    cobj = _init_config(config, False, working_dir)
+    cobj = _init_config(config, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     if not hook_args:
         return cobj.hook_table
 
@@ -77,9 +77,9 @@ def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, c
     return None
 
 
-def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None):
+def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None, state_file=None):
     # pylint: disable=unused-argument
-    cobj = _init_config(config, False, working_dir)
+    cobj = _init_config(config, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     output_status = {}
     if events:
         output_status["events"] = cobj.state.events
@@ -88,7 +88,7 @@ def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None):
     return output_status
 
 
-def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     # pylint: disable=unused-argument
     return OrderedDict(
         [
@@ -100,28 +100,28 @@ def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
     )
 
 
-def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' Dump the configuration file '''
     # pylint: disable=unused-argument
-    cobj = _init_config(config, False, working_dir)
+    cobj = _init_config(config, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     return cobj.config
 
 
-def debug_state_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+def debug_state_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' Dump the state file '''
     # pylint: disable=unused-argument
-    cobj = _init_config(config, False, working_dir)
+    cobj = _init_config(config, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     return cobj.state.state
 
 
-def debug_result_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
+def debug_result_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     # pylint: disable=unused-argument
-    cobj = _init_config(config, False, working_dir)
+    cobj = _init_config(config, False, working_dir, state_file=state_file)
     return cobj.state.result_up
 
 
-def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None):
-    cobj = _init_config(config, False, working_dir)
+def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
+    cobj = _init_config(config, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     if cobj.provisioner == "bicep":
         if not file_exits(f"{cobj.tmp_dir}/targetfile.json"):
             raise CLIError(f"{cobj.tmp_dir}/targetfile.json does not exists please run up first")
@@ -138,9 +138,9 @@ def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None)
         return deployments_status
 
 
-def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phase=2):
+def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phase=2, state_file=None):
     # pylint: disable=unused-argument
-    cobj = _init_config(config, False, working_dir)
+    cobj = _init_config(config, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     line = ""
     print("Type your jinja2 expression.")
     print("to exit type 'quit' or 'exit' or 'ctrl+c'.")
@@ -169,8 +169,8 @@ def _check_deployment_error(cmd, resource_group_name, deployment_name, deploymen
     return deployment_status
 
 
-def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None):
-    cobj = _init_config(config, remove_tmp, working_dir)
+def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None, state_file=None):
+    cobj = _init_config(config, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
     cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
     try:
@@ -217,9 +217,9 @@ def _down_bicep(cmd, cobj):
             raise CLIError(error) from error
 
 
-def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None):
+def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None, state_file=None):
     # pylint: disable=unused-argument
-    cobj = _init_config(config, remove_tmp, working_dir)
+    cobj = _init_config(config, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
     cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
     # Run pre up life cycle
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)

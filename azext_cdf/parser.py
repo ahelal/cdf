@@ -34,11 +34,13 @@ CONFIG_TMP = "tmp_dir"
 CONFIG_UP = "up"
 CONFIG_VARS = "vars"
 CONFIG_PARAMS = "params"
-CONFIG_STATE_FILE = "state"
+CONFIG_STATE_FILENAME = "state_filename"
+CONFIG_STATE_FILEPATH = "state_Path"
 CONFIG_HOOKS = "hooks"
 CONFIG_CDF = "cdf"
 CONFIG_DEPLOYMENT_COMPLETE = "complete_deployment"
-CONFIG_STATE_FILE_DEFAULT = "{{ cdf.tmp_dir }}/state.json"
+CONFIG_STATE_FILEPATH_DEFAULT = "file://{{ cdf.tmp_dir }}"
+CONFIG_STATE_FILENAME_DEFAULT = "state.json"
 LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN = "pre-up", "post-up", "pre-down", "post-down"
 LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL = "pre-test", "post-test", ""
 CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN, LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
@@ -66,12 +68,13 @@ def template_file(ctx, name):
 
 
 class ConfigParser:
-    def __init__(self, config, remove_tmp=False):
+    def __init__(self, config, remove_tmp=False, cli_state=None):
         self.data = {}
         self._config = config
         self.first_phase_vars = {}
         self.second_phase_vars = {}
         self._remove_tmp = remove_tmp
+        self.cli_state = cli_state
         # https://github.com/keleshev/schema
         hooks_schema = {
             str: {
@@ -105,7 +108,8 @@ class ConfigParser:
             Optional(CONFIG_VARS, default={}): dict,
             Optional(CONFIG_PARAMS, default={}): dict,
             Optional(CONFIG_HOOKS, default={}): hooks_schema,
-            Optional(CONFIG_STATE_FILE, default=CONFIG_STATE_FILE_DEFAULT): str,
+            Optional(CONFIG_STATE_FILEPATH, default=CONFIG_STATE_FILEPATH_DEFAULT): str,
+            Optional(CONFIG_STATE_FILENAME, default=CONFIG_STATE_FILENAME_DEFAULT): str,
         }
         self._load_validate()
         self.jinja_env = Environment(loader=BaseLoader, undefined=StrictUndefined)
@@ -169,8 +173,14 @@ class ConfigParser:
         if self._remove_tmp: # remove and create tmp dir incase we will download some stuff for templates
             dir_remove(self.tmp_dir)
         dir_create(self.tmp_dir)
-        self.data[CONFIG_STATE_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILE], context=f"key {CONFIG_STATE_FILE}")
-        self.state = State(self.data[CONFIG_STATE_FILE])  # initialize state
+        if self.cli_state:
+            full_path_state_file = self.cli_state
+        else:
+            self.data[CONFIG_STATE_FILENAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILENAME], context=f"key {CONFIG_STATE_FILENAME}")
+            self.data[CONFIG_STATE_FILEPATH] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILEPATH], context=f"key {CONFIG_STATE_FILEPATH}")
+            full_path_state_file = os.path.join(self.data[CONFIG_STATE_FILEPATH], self.data[CONFIG_STATE_FILENAME])
+        
+        self.state = State(full_path_state_file)  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get
 
         self.first_phase_vars[CONFIG_CDF][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")

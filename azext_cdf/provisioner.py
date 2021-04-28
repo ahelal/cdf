@@ -36,7 +36,9 @@ def run_command(bin_path, args=[], interactive=False, cwd=None):
 def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False, complete_deployment=False):
     arm_template_file = f"{tmp_dir}/targetfile.json"
     _logger.debug(" Building bicep file in tmp dir %s", arm_template_file)
-    build_bicep_file(cmd, [f"{bicep_file}", "--outfile", f"{arm_template_file}"])
+    # build_bicep_file(cmd, [f"{bicep_file}", "--outfile", f"{arm_template_file}"])
+    build_bicep_file(cmd, bicep_file, outfile=arm_template_file)
+
     return run_arm_deployment(
         cmd,
         deployment_name=deployment_name,

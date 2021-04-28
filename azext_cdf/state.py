@@ -5,7 +5,7 @@ from datetime import datetime
 import semver
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load
+from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load, file_http_write_json_content, file_http_read_json_content
 from azext_cdf.version import version
 
 STATE_PHASE_UNKNOWN = "unknown"
@@ -43,15 +43,16 @@ class State():
     ''' The state class '''
 
     def __init__(self, state_file):
-        self.state_file = state_file
         self.config_hooks = None
-        if file_exits(self.state_file):
-            # state file exists
-            try:
-                state_str = file_read_content(self.state_file)
-                self.state_db = json_load(state_str)
-            except CLIError as error:
-                raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
+        if state_file.startswith('file://'):
+            self.state_file = state_file[len("file://"):]
+            self.state_url = None
+        elif state_file.startswith('http://') or state_file.startswith('https://'):
+            self.state_file = None
+            self.state_url = state_file
+        else:
+             raise CLIError(f"Error unsupported schmea for state file '{state_file}' supported schemas 'file://'|'https://'|'http://'")
+        if self._read_state():
             return
         # New state file
         self.state_db = {
@@ -122,7 +123,7 @@ class State():
 
         # hooks/ops in config db but not config_db
         if not self.config_hooks:
-            return 
+            return
         for config_hook in self.config_hooks:
             if not config_hook in self.state_db[STATE_HOOKS_RESULT]:
                 self.state_db[STATE_HOOKS_RESULT][config_hook] = {}
@@ -130,9 +131,28 @@ class State():
                 if not config_op in self.state_db[STATE_HOOKS_RESULT][config_hook]:
                     self.state_db[STATE_HOOKS_RESULT][config_hook][config_op] = {}
 
+    def _read_state(self):
+        if self.state_file and file_exits(self.state_file):
+            # state file exists
+            try:
+                state_str = file_read_content(self.state_file)
+                self.state_db = json_load(state_str)
+            except CLIError as error:
+                raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
+            return True
+        elif self.state_url: # TODO need to add check if path
+            self.state_db = file_http_read_json_content(self.state_url)
+        
+        return False
+
     def _flush_state(self, flush=True):
-        if flush:
+        if not flush:
+            return
+        
+        if self.state_file:
             json_write_to_file(self.state_file, self.state_db)
+        elif self.state_url:
+            file_http_write_json_content(self.state_url, self.state_db)
 
     def transition_to_phase(self, phase):
         self.add_event(f"Transitioning to {phase}", phase=phase, status=STATE_STATUS_PENDING, flush=True)

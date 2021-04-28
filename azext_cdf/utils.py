@@ -6,6 +6,7 @@ import json
 import random
 import string
 import shutil
+import requests
 from os import access, R_OK
 from json import JSONDecodeError
 import yaml
@@ -70,6 +71,13 @@ def file_read_content(filepath):
     except OSError as error:
         raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
 
+def file_http_read_json_content(filepath):
+    try:
+        r = requests.get(filepath)
+        return r.json()
+    except Exception as error:
+        raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
+
 
 def file_write_content(filepath, content):
     try:
@@ -77,6 +85,12 @@ def file_write_content(filepath, content):
             file_in.write(content)
     except OSError as error:
         raise CLIError(f"Failed to write file '{filepath}'. Error: {str(error)}") from error
+
+def file_http_write_json_content(filepath, content):
+    try:
+        r = requests.get(filepath, json=[content])
+    except Exception as error:
+        raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
 
 
 def json_write_to_file(filepath, data):
