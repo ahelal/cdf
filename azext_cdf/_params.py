@@ -14,6 +14,7 @@ def load_arguments(self, _):
     with self.argument_context("cdf up") as context:
         context.argument("prompt", options_list=["--ask", "-a"], help="Ask interactively for missing parameters if any", default=False)
         context.argument("remove_tmp", options_list=["--remove-dir", "-r"], help="Remove temporary directory content and recreate the dir", default=False)
+        context.argument("destroy", options_list=["--destroy", "-d"], help="Destroy environment before provisioning", default=False)
 
     with self.argument_context("cdf down") as context:
         context.argument("remove_tmp", options_list=["--remove-tmp", "-r"], help="Remove temp directory content and recreate the dir", default=False)

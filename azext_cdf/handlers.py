@@ -1,6 +1,7 @@
 """ Commands handler """
 
 import sys
+import os
 from collections import OrderedDict
 from knack.util import CLIError
 from knack.log import get_logger
@@ -72,7 +73,7 @@ def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, c
     elif not status["Status"] == STATE_STATUS_SUCCESS:
         user_confirmation(f"You want to run a hook when the last status is not success '{status['Phase']}'. Are you sure ?")
 
-    cobj.delayed_variable_interpolite()
+    cobj.delayed_variable_interpolate()
     run_hook(cobj, hook_args)
     return None
 
@@ -156,6 +157,15 @@ def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phas
         except CLIError as error:
             print(f"Error : {str(error)}")
 
+def _print_output(cobj):
+    print_dic = cobj.config.get("print", None)
+    if not print_dic:
+        return None
+    obj = {}
+    for key in print_dic.keys():
+        obj[key] = cobj.interpolate(phase=2, template=print_dic[key])
+
+    return obj
 
 def _check_deployment_error(cmd, resource_group_name, deployment_name, deployment_type):
     deployment_status = {}
@@ -217,14 +227,19 @@ def _down_bicep(cmd, cobj):
             raise CLIError(error) from error
 
 
-def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None, state_file=None):
+def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None, state_file=None, destroy=False):
     # pylint: disable=unused-argument
+    if destroy:
+        cwd = os.getcwd()
+        down_handler(cmd, config=config, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
+        dir_change_working(cwd)
+
     cobj = _init_config(config, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
     cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
     # Run pre up life cycle
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
     # Run template interpolate
-    cobj.delayed_up_interpolite()
+    cobj.delayed_up_interpolate()
     try:
         if cobj.provisioner == "bicep":
             output_resources, outputs = run_bicep(
@@ -251,7 +266,7 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
                 no_prompt=False,
                 complete_deployment=cobj.deployment_mode,
             )
-
+        return _print_output(cobj)
     except CLIError as error:
         cobj.state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
         raise

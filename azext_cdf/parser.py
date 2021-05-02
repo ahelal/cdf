@@ -38,6 +38,7 @@ CONFIG_STATE_FILENAME = "state_filename"
 CONFIG_STATE_FILEPATH = "state_Path"
 CONFIG_HOOKS = "hooks"
 CONFIG_CDF = "cdf"
+CONFIG_PRINT = "print"
 CONFIG_DEPLOYMENT_COMPLETE = "complete_deployment"
 CONFIG_STATE_FILEPATH_DEFAULT = "file://{{ cdf.tmp_dir }}"
 CONFIG_STATE_FILENAME_DEFAULT = "state.json"
@@ -107,6 +108,7 @@ class ConfigParser:
             # Optional('vars_file', default=[]): Or(str,list),
             Optional(CONFIG_VARS, default={}): dict,
             Optional(CONFIG_PARAMS, default={}): dict,
+            Optional(CONFIG_PRINT, default={}): dict,
             Optional(CONFIG_HOOKS, default={}): hooks_schema,
             Optional(CONFIG_STATE_FILEPATH, default=CONFIG_STATE_FILEPATH_DEFAULT): str,
             Optional(CONFIG_STATE_FILENAME, default=CONFIG_STATE_FILENAME_DEFAULT): str,
@@ -242,13 +244,13 @@ class ConfigParser:
     def _update_result(self, result):
         self.second_phase_vars[RUNTIME_RESULT] = result
 
-    def delayed_variable_interpolite(self):
+    def delayed_variable_interpolate(self):
         for k in self._delayed_vars:
             self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in delayed interpolate '{k}'")
 
-    def delayed_up_interpolite(self):
+    def delayed_up_interpolate(self):
         ''' '''
-        self.delayed_variable_interpolite()
+        self.delayed_variable_interpolate()
         if CONFIG_PARAMS in self.data:
             for key, value in self.data[CONFIG_PARAMS].items():
                 self.data[CONFIG_PARAMS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config in delayed interpolate '{value}'")
