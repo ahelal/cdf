@@ -30,7 +30,7 @@ class BicepHelperCommandLoad(AzCommandsLoader):
             group_command.custom_command("result", "debug_result_handler")
             group_command.custom_command("state", "debug_state_handler")
             group_command.custom_command("interpolate", "debug_interpolate_handler")
-            group_command.custom_command("deployment-errors", "debug_deployment_error_handler")
+            group_command.custom_command("errors", "debug_deployment_error_handler")
         return self.command_table
 
     def load_arguments(self, command):
