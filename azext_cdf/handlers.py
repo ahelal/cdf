@@ -16,11 +16,11 @@ from azure.cli.core.commands.client_factory import get_subscription_id
 from azext_cdf.parser import ConfigParser, CONFIG_PARAMS
 from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN #  LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.version import version
-from azext_cdf.utils import json_write_to_file, find_the_right_file, dir_change_working, json_load, file_read_content, file_exits
+from azext_cdf.utils import json_write_to_file, find_the_right_file, find_the_right_dir, dir_change_working, json_load, file_read_content, file_exits
 from azext_cdf.hooks import run_hook, run_hook_lifecycle
 from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN # STATE_PHASE_TESTED, STATE_PHASE_TESTING,
 from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR #, STATE_STATUS_FAILED
-from azext_cdf.provisioner import run_bicep, run_arm_deployment
+from azext_cdf.provisioner import run_bicep, run_arm_deployment, run_terraform_apply, run_terraform_destroy
 
 _logger = get_logger(__name__)
 
@@ -157,15 +157,15 @@ def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phas
         except CLIError as error:
             print(f"Error : {str(error)}")
 
-def _print_output(cobj):
-    print_dic = cobj.config.get("print", None)
-    if not print_dic:
-        return None
-    obj = {}
-    for key in print_dic.keys():
-        obj[key] = cobj.interpolate(phase=2, template=print_dic[key])
+# def _print_output(cobj):
+#     print_dic = cobj.config.get("print", None)
+#     if not print_dic:
+#         return None
+#     obj = {}
+#     for key in print_dic.keys():
+#         obj[key] = cobj.interpolate(phase=2, template=print_dic[key])
 
-    return obj
+#     return obj
 
 def _check_deployment_error(cmd, resource_group_name, deployment_name, deployment_type):
     deployment_status = {}
@@ -186,6 +186,19 @@ def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None,
     try:
         if cobj.provisioner == "bicep" or cobj.provisioner == "arm":
             _down_bicep(cmd, cobj)
+        elif cobj.provisioner == "terraform":
+            # Run template interpolate
+            cobj.delayed_up_interpolate()
+            output_resources, outputs = run_terraform_destroy(
+                cmd,
+                terraform_dir=find_the_right_dir(cobj.up_file, cobj.config_dir), 
+                tmp_dir=cobj.tmp_dir,
+                resource_group=cobj.resource_group_name, 
+                location=cobj.location,
+                params=cobj.data[CONFIG_PARAMS],
+                manage_resource_group=cobj.managed_resource,
+                no_prompt=False
+            )
     except CLIError as error:
         cobj.state.add_event(f"Errored during down phase: {str(error)}", STATE_STATUS_ERROR)
         raise CLIError(error) from error
@@ -266,14 +279,24 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
                 no_prompt=False,
                 complete_deployment=cobj.deployment_mode,
             )
-        return _print_output(cobj)
+        elif cobj.provisioner == "terraform":
+            output_resources, outputs = run_terraform_apply(
+                cmd,
+                terraform_dir=find_the_right_dir(cobj.up_file, cobj.config_dir), 
+                tmp_dir=cobj.tmp_dir,
+                resource_group=cobj.resource_group_name, 
+                location=cobj.location,
+                params=cobj.data[CONFIG_PARAMS],
+                manage_resource_group=cobj.managed_resource,
+                no_prompt=False
+            )
+        # return _print_output(cobj)
     except CLIError as error:
         cobj.state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
         raise
     except Exception as error:
         cobj.state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
         raise
-
     cobj.state.set_result(outputs=outputs, resources=output_resources, flush=True)
     cobj.state.completed_phase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
     run_hook_lifecycle(cobj, LIFECYCLE_POST_UP)

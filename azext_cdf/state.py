@@ -177,9 +177,9 @@ class State():
         self._flush_state(flush)
 
     def set_result(self, outputs=None, resources=None, flush=True):
-        if resources:
-            self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_OUTPUTS] = outputs
         if outputs:
+            self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_OUTPUTS] = outputs
+        if resources:
             self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_RESOURCES] = resources
         self._flush_state(flush)
 

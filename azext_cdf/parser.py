@@ -27,7 +27,7 @@ CONFIG_NAME = "name"
 CONFIG_RG = "resource_group"
 CONFIG_RG_MANAGED = "manage_resource_group"
 CONFIG_LOCATION = "location"
-CONFIG_SUPPORTED_PROVISIONERS = ('bicep', 'arm') # terraform
+CONFIG_SUPPORTED_PROVISIONERS = ('bicep', 'arm', 'terraform')
 CONFIG_PROVISIONER = "provisioner"
 CONFIG_SCOPE = "scope"
 CONFIG_TMP = "tmp_dir"
@@ -38,7 +38,6 @@ CONFIG_STATE_FILENAME = "state_filename"
 CONFIG_STATE_FILEPATH = "state_Path"
 CONFIG_HOOKS = "hooks"
 CONFIG_CDF = "cdf"
-CONFIG_PRINT = "print"
 CONFIG_DEPLOYMENT_COMPLETE = "complete_deployment"
 CONFIG_STATE_FILEPATH_DEFAULT = "file://{{ cdf.tmp_dir }}"
 CONFIG_STATE_FILENAME_DEFAULT = "state.json"
@@ -108,7 +107,6 @@ class ConfigParser:
             # Optional('vars_file', default=[]): Or(str,list),
             Optional(CONFIG_VARS, default={}): dict,
             Optional(CONFIG_PARAMS, default={}): dict,
-            Optional(CONFIG_PRINT, default={}): dict,
             Optional(CONFIG_HOOKS, default={}): hooks_schema,
             Optional(CONFIG_STATE_FILEPATH, default=CONFIG_STATE_FILEPATH_DEFAULT): str,
             Optional(CONFIG_STATE_FILENAME, default=CONFIG_STATE_FILENAME_DEFAULT): str,
@@ -252,8 +250,19 @@ class ConfigParser:
         ''' '''
         self.delayed_variable_interpolate()
         if CONFIG_PARAMS in self.data:
-            for key, value in self.data[CONFIG_PARAMS].items():
-                self.data[CONFIG_PARAMS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config in delayed interpolate '{value}'")
+            self._delayed_up_interpolate_element(self.data)                
+                
+
+    def _delayed_up_interpolate_element(self, obj):
+        if isinstance(obj, (list, set)):
+            for i in range(len(obj)):
+                obj[i] = self._delayed_up_interpolate_element(obj[i])
+        elif isinstance(obj, dict):
+            for key in obj:
+                obj[key] = self._delayed_up_interpolate_element(obj[key])
+        elif isinstance(obj, str):
+            obj = obj = self.interpolate(FIRST_PHASE, obj, f"variables in config in delayed interpolate '{obj}'")
+        return obj
 
     def interpolate(self, phase, template, context=None, extra_vars=None, raw_undefined_error=False):
         if template is None:

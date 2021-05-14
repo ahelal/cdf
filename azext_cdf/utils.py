@@ -159,21 +159,25 @@ def is_part_of(item, valid_list):
         raise CLIError(f"unsupported date type '{type(item)}', {item}")
 
 
+def find_the_right_dir(config_up_dir, config_dir):
+    if config_up_dir:
+        return config_up_dir
+    return config_dir
+
 def find_the_right_file(config_up_file, provisioner_name, file_extension, config_dir):
-    up_file = ""
     if config_up_file:
-        up_file = config_up_file
-        logger.debug("Using %s file from up argument %s.", provisioner_name, up_file)
-    else:
-        for filename in glob.glob(f"{config_dir}/*{file_extension}"):
-            if len(up_file) > 0:
-                raise CLIError(f"Found more then one {file_extension} file. Please configure 'up' option.")
-            up_file = filename
-            logger.debug("Using %s file from globing %s.", provisioner_name, up_file)
+        logger.debug("Using %s file from up argument %s.", provisioner_name, config_up_file)
+        return config_up_file
+
+    up_file = ""
+    for filename in glob.glob(f"{config_dir}/*{file_extension}"):
+        if len(up_file) > 0:
+            raise CLIError(f"Found more then one {file_extension} file. Please configure 'up' option.")
+        up_file = filename
+        logger.debug("Using %s file from globing %s.", provisioner_name, up_file)
 
     if not up_file:
         raise CLIError(f"Can't find {file_extension} file. Please configure 'up' option.")
-
     return up_file
 
 def random_string(length, option=['lower','upper']):

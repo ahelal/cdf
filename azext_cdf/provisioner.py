@@ -1,8 +1,11 @@
 """ Provisioner file """
 
 import subprocess
+import json
+import os
 from knack.util import CLIError
 from knack.log import get_logger
+from azext_cdf.utils import json_write_to_file
 from azure.cli.command_modules.resource.custom import build_bicep_file
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group
 
@@ -82,3 +85,47 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
     output_resources = deployment.result().as_dict().get("properties", {}).get("output_resources", {})
     output = deployment.result().as_dict().get("properties", {}).get("outputs", {})
     return output_resources, output
+
+def run_terraform_apply(cmd, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
+    varsfile = os.path.join(tmp_dir,"terraformvars.json")
+    if manage_resource_group:
+        create_resource_group(cmd, rg_name=resource_group, location=location)
+    if params:
+        json_write_to_file(varsfile, params)
+
+    # terraform apply -input=false -var-file input.json -auto-approve
+    run_command("terraform", args=["init"], interactive=False, cwd=terraform_dir)
+
+    args = ["apply", f"-input={no_prompt}", "-auto-approve"]
+    if params:
+        args.append("-var-file")
+        args.append(varsfile)
+
+    run_command("terraform", args=args, interactive=False, cwd=terraform_dir)
+    # TODO fix return
+    stdout, stderr = run_command("terraform", args=["output","-json"], interactive=False, cwd=terraform_dir)
+    try:
+        output = json.loads(stdout)
+    except subprocess.CalledProcessError as error:
+        context = f"Error while decoding json from terraform output. {error}"
+        raise CLIError(error) from error
+    output_resources = {}
+    return output_resources, output
+
+def run_terraform_destroy(cmd, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
+    varsfile = os.path.join(tmp_dir,"terraformvars.json")
+    if manage_resource_group:
+        create_resource_group(cmd, rg_name=resource_group, location=location)
+    if params:
+        json_write_to_file(varsfile, params)
+
+    run_command("terraform", args=["init"], interactive=False, cwd=terraform_dir)
+
+    args = ["destroy", f"-input={no_prompt}", "-auto-approve"]
+    if params:
+        args.append("-var-file")
+        args.append(varsfile)
+
+    run_command("terraform", args=args, interactive=False, cwd=terraform_dir)
+
+    return None, None
