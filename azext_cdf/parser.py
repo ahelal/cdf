@@ -8,7 +8,7 @@ from knack.util import CLIError
 from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction, Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError
-from azext_cdf.version import version
+from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname, random_string
 from azext_cdf.state import State
 
@@ -45,8 +45,9 @@ LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN = "
 LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL = "pre-test", "post-test", ""
 CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN, LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
 CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
-CONFIG_SUPPORTED_OPS_TYPES = ("az", "cmd", "print", "call", "script")  # ('bicep', 'arm',  'api', 'rest', "terraform")
+CONFIG_SUPPORTED_OPS_TYPES = ("az", "cmd", "print", "call", "script")
 CONFIG_SUPPORTED_OPS_MODE = ('wait', "interactive")
+CONFIG_DESCRIPTION = "description"
 
 def include_file(name):
     try:
@@ -68,6 +69,8 @@ def template_file(ctx, name):
 
 
 class ConfigParser:
+    ''' main parser file '''
+
     def __init__(self, config, remove_tmp=False, cli_state=None):
         self.data = {}
         self._config = config
@@ -81,7 +84,7 @@ class ConfigParser:
                 "ops": [
                     {
                         Optional("name"): str,
-                        Optional("description"): str,
+                        Optional(CONFIG_DESCRIPTION): str,
                         Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
                         Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
                         Optional("mode", default='wait'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_MODE),
@@ -90,9 +93,24 @@ class ConfigParser:
                     }
                 ],
                 Optional("lifecycle", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_LIFECYCLE)),
-                Optional("description", default=""): str,
+                Optional(CONFIG_DESCRIPTION, default=""): str,
                 Optional("run_if", default="true"): str,
             }
+        }
+        test_schema = {
+         str: {
+            Optional("file"): str,
+            Optional(CONFIG_NAME): And(str, len),
+            Optional(CONFIG_DESCRIPTION): And(str, len),
+            Optional(CONFIG_RG): And(str, len),
+            Optional(CONFIG_LOCATION): And(str, len),
+            Optional(CONFIG_RG_MANAGED, default=True): bool,
+            Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
+            Optional(CONFIG_UP, default=None): And(str, len),
+            # Optional('vars_file', default=[]): Or(str,list),
+            Optional(CONFIG_VARS, default={}): dict,
+            Optional(CONFIG_PARAMS, default={}): dict,
+         }
         }
         self._schema_def = {
             CONFIG_NAME: And(str, len),
@@ -108,6 +126,7 @@ class ConfigParser:
             Optional(CONFIG_VARS, default={}): dict,
             Optional(CONFIG_PARAMS, default={}): dict,
             Optional(CONFIG_HOOKS, default={}): hooks_schema,
+            Optional("tests", default={}): test_schema,
             Optional(CONFIG_STATE_FILEPATH, default=CONFIG_STATE_FILEPATH_DEFAULT): str,
             Optional(CONFIG_STATE_FILENAME, default=CONFIG_STATE_FILENAME_DEFAULT): str,
         }
@@ -159,7 +178,7 @@ class ConfigParser:
     def _setup_first_phase_interpolation(self):
         self.first_phase_vars = {
             CONFIG_CDF: {
-                "version": version,
+                "version": VERSION,
                 "config_dir": real_dirname(self._config),
                 "platform": platform.system().lower(),
             },
@@ -179,7 +198,7 @@ class ConfigParser:
             self.data[CONFIG_STATE_FILENAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILENAME], context=f"key {CONFIG_STATE_FILENAME}")
             self.data[CONFIG_STATE_FILEPATH] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILEPATH], context=f"key {CONFIG_STATE_FILEPATH}")
             full_path_state_file = os.path.join(self.data[CONFIG_STATE_FILEPATH], self.data[CONFIG_STATE_FILENAME])
-        
+
         self.state = State(full_path_state_file)  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get
 
@@ -215,7 +234,6 @@ class ConfigParser:
                 else:
                     raise
 
-
     def _interpolate_object(self, phase, template, variables=None):
         if isinstance(template, str):
             return self._interpolate_string(template, variables)
@@ -247,11 +265,10 @@ class ConfigParser:
             self.first_phase_vars[CONFIG_VARS][k] = self.interpolate(SECOND_PHASE, self.data[CONFIG_VARS][k], f"variables in config in delayed interpolate '{k}'")
 
     def delayed_up_interpolate(self):
-        ''' '''
         self.delayed_variable_interpolate()
         if CONFIG_PARAMS in self.data:
-            self._delayed_up_interpolate_element(self.data)                
-                
+            self._delayed_up_interpolate_element(self.data)
+
 
     def _delayed_up_interpolate_element(self, obj):
         if isinstance(obj, (list, set)):
@@ -293,38 +310,74 @@ class ConfigParser:
 
     @property
     def name(self):
+        ''' returns CDF name '''
+
         return self.first_phase_vars[CONFIG_CDF][CONFIG_NAME]
 
     @property
     def resource_group_name(self):
+        ''' returns CDF resource group '''
+
         return self.first_phase_vars[CONFIG_CDF][CONFIG_RG]
 
     @property
     def managed_resource(self):
+        ''' returns boolean if resource group should be managed by CDF '''
+
         return self.data[CONFIG_RG_MANAGED]
 
     @property
     def location(self):
+        ''' returns CDF azure location '''
+
         return self.first_phase_vars[CONFIG_CDF][CONFIG_LOCATION]
 
     @property
     def tmp_dir(self):
+        ''' returns CDF temp directory '''
+
         return self.first_phase_vars[CONFIG_CDF][CONFIG_TMP]
 
     @property
-    def up_file(self):
+    def up_location(self):
+        ''' returns CDF up location '''
+
         return self.data[CONFIG_UP]
 
     @property
     def provisioner(self):
+        ''' returns CDF provisioner '''
+
         return self.data["provisioner"]
 
     @property
     def config(self):
+        ''' returns raw data of config '''
+
         return self.data
 
     @property
+    def platform(self):
+        ''' returns current platform '''
+
+        return self.first_phase_vars[CONFIG_CDF]["platform"]
+
+    @property
+    def config_dir(self):
+        ''' return config directory path '''
+
+        return self.first_phase_vars[CONFIG_CDF]["config_dir"]
+
+    @property
+    def deployment_mode(self):
+        ''' return deployment mode '''
+
+        return self.data[CONFIG_DEPLOYMENT_COMPLETE]
+
+    @property
     def hook_names(self):
+        ''' returns all hook names as list '''
+
         hooks = []
         # if self.data[CONFIG_HOOKS]:
         for k, _ in self.data[CONFIG_HOOKS].items():
@@ -332,44 +385,39 @@ class ConfigParser:
         return hooks
 
     @property
+    def test_names(self):
+        ''' returns all test names as list '''
+
+        tests = []
+        for k, _ in self.data["tests"].items():
+            tests.append(k)
+        return tests
+
+    @property
     def hook_table(self):
         output_hooks = []
         # if self.data[CONFIG_HOOKS]:
-        for k, v in self.data[CONFIG_HOOKS].items():
-            lifecycle = v["lifecycle"]
+        for key, value in self.data[CONFIG_HOOKS].items():
+            lifecycle = value["lifecycle"]
             if isinstance(lifecycle, str):
                 lifecycle = [lifecycle]
-            output_hooks.append({"name": k, "description": v["description"], "lifecycle": lifecycle})
+            output_hooks.append({"name": key, "description": value["description"], "lifecycle": lifecycle})
         return output_hooks
 
     @property
     def hooks_ops(self):
+        ''' returns ops in hooks '''
+
         output_hooks = {}
         if not self.data[CONFIG_HOOKS]:
             return output_hooks
 
         for hook_k, hook_v in self.data[CONFIG_HOOKS].items():
             output_hooks[hook_k] = {}
-            for op in hook_v["ops"]:
-                op_name = op.get("name", False)
+            for op_obj in hook_v["ops"]:
+                op_name = op_obj.get("name", False)
                 if op_name:
                     if op_name in output_hooks[hook_k]:
                         raise CLIError(f"config schema error duplicate op name '{op_name}'  in hook '{hook_k}")
                     output_hooks[hook_k][op_name] = {}
         return output_hooks
-
-    @property
-    def state_file(self):
-        return self.data[CONFIG_STATE_FILE]
-
-    @property
-    def platform(self):
-        return self.first_phase_vars[CONFIG_CDF]["platform"]
-
-    @property
-    def config_dir(self):
-        return self.first_phase_vars[CONFIG_CDF]["config_dir"]
-
-    @property
-    def deployment_mode(self):
-        return self.data[CONFIG_DEPLOYMENT_COMPLETE]

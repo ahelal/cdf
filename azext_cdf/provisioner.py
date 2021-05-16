@@ -12,7 +12,12 @@ from azure.cli.command_modules.resource.custom import deploy_arm_template_at_res
 _logger = get_logger(__name__)
 
 
-def run_command(bin_path, args=[], interactive=False, cwd=None):
+def run_command(bin_path, args=None, interactive=False, cwd=None):
+    """
+    Run CLI commands
+    Returns: stdout, stderr  strings
+    Exceptions: raise CLIError on execution error
+    """
     process = None
     stdout = None
     stderr = None
@@ -86,7 +91,7 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
     output = deployment.result().as_dict().get("properties", {}).get("outputs", {})
     return output_resources, output
 
-def run_terraform_apply(cmd, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
+def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     varsfile = os.path.join(tmp_dir,"terraformvars.json")
     if manage_resource_group:
         create_resource_group(cmd, rg_name=resource_group, location=location)
@@ -96,7 +101,7 @@ def run_terraform_apply(cmd, terraform_dir, tmp_dir, resource_group, location, p
     # terraform apply -input=false -var-file input.json -auto-approve
     run_command("terraform", args=["init"], interactive=False, cwd=terraform_dir)
 
-    args = ["apply", f"-input={no_prompt}", "-auto-approve"]
+    args = ["apply", f"-input={no_prompt}", f"-state={deployment_name}.tfstate", "-auto-approve"]
     if params:
         args.append("-var-file")
         args.append(varsfile)
@@ -107,12 +112,11 @@ def run_terraform_apply(cmd, terraform_dir, tmp_dir, resource_group, location, p
     try:
         output = json.loads(stdout)
     except subprocess.CalledProcessError as error:
-        context = f"Error while decoding json from terraform output. {error}"
-        raise CLIError(error) from error
+        raise CLIError(f"Error while decoding json from terraform output. Error: {error}") from error
     output_resources = {}
     return output_resources, output
 
-def run_terraform_destroy(cmd, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
+def run_terraform_destroy(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     varsfile = os.path.join(tmp_dir,"terraformvars.json")
     if manage_resource_group:
         create_resource_group(cmd, rg_name=resource_group, location=location)
@@ -120,12 +124,9 @@ def run_terraform_destroy(cmd, terraform_dir, tmp_dir, resource_group, location,
         json_write_to_file(varsfile, params)
 
     run_command("terraform", args=["init"], interactive=False, cwd=terraform_dir)
-
-    args = ["destroy", f"-input={no_prompt}", "-auto-approve"]
+    args = ["destroy", f"-input={no_prompt}", f"-state={deployment_name}.tfstate", "-auto-approve"]
     if params:
         args.append("-var-file")
         args.append(varsfile)
 
-    run_command("terraform", args=args, interactive=False, cwd=terraform_dir)
-
-    return None, None
+    return run_command("terraform", args=args, interactive=False, cwd=terraform_dir)

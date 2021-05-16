@@ -13,7 +13,7 @@ import os
 from setuptools import setup, find_packages
 azext = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'azext_cdf/')
 sys.path.append(azext)
-from version import version
+from version import VERSION
 
 sys.path.pop()
 
@@ -38,7 +38,7 @@ DEPENDENCIES = [
 
 setup(
     name='cdf',
-    version=version,
+    version=VERSION,
     description='CDF tools',
     author='Adham Abdelwahab',
     author_email='',

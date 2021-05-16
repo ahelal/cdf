@@ -21,10 +21,14 @@ def load_arguments(self, _):
 
     with self.argument_context("cdf status") as context:
         context.argument("events", options_list=["--events", "-e"], help="Print also events", default=False)
+
     with self.argument_context("debug_interpolate_handler") as context:
         context.argument("phase", options_list=["--phase", "-p"], help="test your jinja2 expression", default=2)
 
     with self.argument_context("cdf hook") as context:
         context.positional("hook_args", nargs="*", help="Hook name to run.", default=None)
-
         context.argument("confirm", options_list=["--yes", "-y"], help="Run hook even if an phase or status are not ready. (Might corrupt state)", default=None)
+
+    with self.argument_context("cdf test") as context:
+        context.argument("fail", options_list=["--fail", "-f"], help="exits after first failure rather then go through all tests.", default=False)
+        context.positional("test_args", nargs="*", help="Test name to run. If none provided will run all.", default=None)

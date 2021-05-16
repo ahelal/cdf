@@ -6,7 +6,7 @@ import semver
 from knack.util import CLIError
 from knack.log import get_logger
 from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load, file_http_write_json_content, file_http_read_json_content
-from azext_cdf.version import version
+from azext_cdf.version import VERSION
 
 STATE_PHASE_UNKNOWN = "unknown"
 STATE_PHASE_GOING_UP = "transitioning_up"
@@ -38,7 +38,6 @@ STATE_STORE = "store"
 
 logger = get_logger(__name__)
 
-
 class State():
     ''' The state class '''
 
@@ -51,7 +50,7 @@ class State():
             self.state_file = None
             self.state_url = state_file
         else:
-             raise CLIError(f"Error unsupported schmea for state file '{state_file}' supported schemas 'file://'|'https://'|'http://'")
+            raise CLIError(f"Error unsupported schmea for state file '{state_file}' supported schemas 'file://'|'https://'|'http://'")
         if self._read_state():
             return
         # New state file
@@ -61,7 +60,7 @@ class State():
             STATE_LASTUPDATE: self._timestamp(),
             STATE_STATUS: -1,
             STATE_EVENTS: [],
-            STATE_VERSION: version,
+            STATE_VERSION: VERSION,
             STATE_STORE: {},
             STATE_HOOKS_RESULT: {},
             STATE_RESOURCE_GROUP: None,
@@ -75,7 +74,6 @@ class State():
         ''' Check if resource group is mapping to state else raise an error'''
 
         self.config_hooks = config_hooks
-
         if self.state_db[STATE_RESOURCE_GROUP] is None:
             self.state_db[STATE_RESOURCE_GROUP] = resource_group
         elif resource_group == self.state_db[STATE_RESOURCE_GROUP]:
@@ -100,11 +98,11 @@ class State():
     def _version_compare(self):
         ''' Check if state version '''
         state_version = self.state_db["version"]
-        version_compare = semver.compare(state_version, version)
+        version_compare = semver.compare(state_version, VERSION)
         if version_compare == -1:  # state is less then cli
-            logger.warning("Your state file is out date: state version %s CDF version %s. Run `up -r` to rewrite state", state_version, version)
+            logger.warning("Your state file is out date: state version %s CDF version %s. Run `up -r` to rewrite state", state_version, VERSION)
         elif version_compare == 1:  # state is more then cli
-            logger.warning("Your CDF extension is outdate: state version %s CLI version %s. Upgrade extension", state_version, version)
+            logger.warning("Your CDF extension is outdate: state version %s CLI version %s. Upgrade extension", state_version, VERSION)
         elif version_compare == 0:  # state is less then cli
             pass
 
@@ -140,24 +138,35 @@ class State():
             except CLIError as error:
                 raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
             return True
-        elif self.state_url: # TODO need to add check if path
+        if self.state_url: # TODO need to add check if path
             self.state_db = file_http_read_json_content(self.state_url)
-        
         return False
 
     def _flush_state(self, flush=True):
         if not flush:
             return
-        
         if self.state_file:
             json_write_to_file(self.state_file, self.state_db)
         elif self.state_url:
             file_http_write_json_content(self.state_url, self.state_db)
 
+    @staticmethod
+    def _timestamp():
+        ''' Current timestamp '''
+
+        # utc='%H:%M:%S %d/%m/%Y-%Z'
+        # return datetime.utcnow().strftime(utc)
+        local = "%H:%M:%S %d/%m/%Y"
+        return datetime.now().strftime(local)
+
     def transition_to_phase(self, phase):
+        """An alias to add event to write state transition"""
+
         self.add_event(f"Transitioning to {phase}", phase=phase, status=STATE_STATUS_PENDING, flush=True)
 
     def completed_phase(self, phase, status, msg=""):
+        """An alias to add event to write phase state"""
+
         if status == STATE_STATUS_SUCCESS:
             self.add_event(f"Successfully reached {phase}. { msg }", phase=phase, status=STATE_STATUS_SUCCESS, flush=True)
         elif status == STATE_STATUS_ERROR:
@@ -177,6 +186,8 @@ class State():
         self._flush_state(flush)
 
     def set_result(self, outputs=None, resources=None, flush=True):
+        ''' Write outputs and resources to state'''
+
         if outputs:
             self.state_db[STATE_UP_RESULT][STATE_UP_RESULT_OUTPUTS] = outputs
         if resources:
@@ -184,6 +195,9 @@ class State():
         self._flush_state(flush)
 
     def set_hook_state(self, hook, op_name, op_data, flush=True):
+        ''' Write hook output to the state file'''
+
+        # TODO add state success or failure
         if not self.state_db[STATE_HOOKS_RESULT][hook].get(op_name, False):
             self.state_db[STATE_HOOKS_RESULT][hook][op_name] = {}
         self.state_db[STATE_HOOKS_RESULT][hook][op_name] = {**self.state_db[STATE_HOOKS_RESULT][hook][op_name], **op_data}
@@ -191,22 +205,18 @@ class State():
 
     def store_get(self, key, value):
         ''' Get variable from store in state'''
+
         try:
             return self.state_db[STATE_STORE][key]
         except KeyError:
             self.state_db[STATE_STORE][key] = value
             return value
 
-    @staticmethod
-    def _timestamp():
-        ''' Current timestamp '''
-        # utc='%H:%M:%S %d/%m/%Y-%Z'
-        # return datetime.utcnow().strftime(utc)
-        local = "%H:%M:%S %d/%m/%Y"
-        return datetime.now().strftime(local)
 
     @property
     def status(self):
+        ''' Return status from state file'''
+
         last_status_event = self.state_db[STATE_EVENTS][self.state_db[STATE_STATUS]]
         return_status = {
             "Name": self.state_db[STATE_DEPLOYMENT_NAME],
@@ -221,7 +231,8 @@ class State():
 
     @property
     def events(self):
-        ''' Return the events in the state file '''
+        ''' Return the events from state file '''
+
         return_events = []
         for event in reversed(self.state_db[STATE_EVENTS]):
             return_events.append(
@@ -238,14 +249,17 @@ class State():
     @property
     def result_up(self):
         ''' Return the result dict (output and resources)'''
+
         return self.state_db[STATE_UP_RESULT]
 
     @property
     def result_hooks(self):
         ''' Return the results for all hooks'''
+
         return self.state_db[STATE_HOOKS_RESULT]
 
     @property
     def state(self):
         ''' Return the state dict '''
+
         return self.state_db

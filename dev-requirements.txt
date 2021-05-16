@@ -1,7 +1,7 @@
 azure-cli
 pytest
 schema
-black
 pylint
 wheel
 semver
+pyaml

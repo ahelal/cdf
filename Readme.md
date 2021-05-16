@@ -2,7 +2,7 @@
 
 ## Overview
 
-TODO
+CDF is an Azure CLI plugin that will make your life easier to develop, test, maintain, share units, and run IaC code in Azure. currently supports IaC `ARM`, `bicep` and `terraform`.
 
 ## Install
 
@@ -11,9 +11,13 @@ TODO
     * `make venv` create python virtual environment-
     * `make install` this will build the extension and install
 
-## uninstall
+## Uninstall
 
 To uninstall the extension run `make uninstall`
+
+## Quick start guide
+
+TODO
 
 ## Configuration 
 
@@ -32,7 +36,7 @@ location: 'eastus'
 scope: "resource_group"
 # Optional, bool, not templatable. "Do a complete or incremental deployment"
 complete_deployment: true
-# Optional, string, not templatable. "At the moment only bicep is supported"
+# Optional, string, not templatable. default to bicep, supports "bicep, arm, terraform"
 provisioner: 'bicep'
 # Optional, string, templatable defaults to *.bicep file in the same dir as `.cdf.yml` . "main Bicep file used for provisioning"
 up: file.bicep
@@ -63,7 +67,26 @@ hooks:
 
 ### Hooks 
 
-TODO 
+TODO
+
+#### Hook types
+
+TODO
+
+##### az
+TODO
+
+##### cmd
+TODO
+
+##### script
+TODO
+
+##### print
+TODO
+
+##### call
+TODO
 
 ### Hooks args
 
@@ -83,7 +106,7 @@ All ['info', 'option1', 'option2']
 Hook=info First=option1 Second=option2
 ```
 
-### life cycle 
+### Life cycle 
 
 TODO
 
@@ -120,7 +143,8 @@ Besides common filters in jinja2 https://jinja.palletsprojects.com/en/2.11.x/tem
 
 ### Result
 
-TODO
+If your code has `outputs` you can access them using `{{ result.outputs.YOUR_OUTPUT_NAME.value }}` after you provision. You can use them in any post up hooks. 
+You can also access the `resources` created if your using `arm or bicep` provisioner using `{{ result.resources }}`
 
 ### Phases
 
@@ -134,9 +158,8 @@ Check the examples https://github.com/ahelal/cdf-examples
 
 ## TODO
 
-* add jinja2 test to check dir, file , and filter for json/yaml
+* add jinja2 test to check dir, file, and filter for json/yaml
 * Tests :)
-* Support terraform
 * Implement test handler and test lifecycle
 * Implement generic rest interface 
 * Status should attempt to reconcile with ARM and update real status
