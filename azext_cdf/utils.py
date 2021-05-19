@@ -6,22 +6,66 @@ import json
 import random
 import string
 import shutil
-import requests
 from os import access, R_OK
 from json import JSONDecodeError
+import requests
+
 import yaml
 from knack.log import get_logger
 from knack.util import CLIError
+import azure.cli.core.commands.progress as progress
+# from azext_cdf.parser import ConfigParser
 
 logger = get_logger(__name__)
 
+class Progress():
+    ''' Progress message'''
+    def __init__(self, cmd, pseudo=True):
+        self.pseudo = pseudo
+        if self.pseudo:
+            cmd.cli_ctx.only_show_errors = True
+            cmd.cli_ctx.progress_controller = self
+            return
+        self.controller = progress.ProgressHook()
+        self.controller.init_progress(progress.get_progress_view())
+
+    def init_progress(self, progress_view=None):
+        ''' NoOps '''
+        return
+    def begin(self, msg=None):
+        ''' begin message '''
+        if self.pseudo:
+            return
+        self.controller.begin(message=msg)
+    def end(self, msg=None):
+        ''' end message '''
+        if self.pseudo:
+            return
+        self.controller.end(message=msg)
+    def stop(self):
+        ''' NoOps '''
+        return
+    def update_progress(self):
+        ''' NoOps '''
+        return
+
+# TODO should be refactored into parser code
+def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None, test=None):
+    cwd = os.getcwd()
+    if working_dir:
+        dir_change_working(working_dir)
+    return config_parser(config, remove_tmp, state_file, test=test), cwd
 
 def real_dirname(dir_path):
+    ''' return real dir name '''
+
     realpath = os.path.realpath(dir_path)
     return os.path.dirname(os.path.abspath(realpath))
 
 
 def dir_exists(filepath):
+    ''' test if a directory exists '''
+
     if not os.path.exists(filepath):
         return False
     # if it exists it should be a dir or a link
@@ -29,6 +73,8 @@ def dir_exists(filepath):
 
 
 def dir_create(filepath):
+    ''' Create a directory '''
+
     if dir_exists(filepath):
         return
     try:
@@ -38,6 +84,8 @@ def dir_create(filepath):
 
 
 def dir_remove(filepath):
+    ''' Remove a directory '''
+
     if not dir_exists(filepath):
         return
     try:
@@ -47,6 +95,8 @@ def dir_remove(filepath):
 
 
 def dir_change_working(dirpath):
+    ''' Change working directory '''
+
     abs_path = os.path.realpath(dirpath)
     if not abs_path:
         raise CLIError(f"Invalid working directory supplied {abs_path}")
@@ -56,7 +106,9 @@ def dir_change_working(dirpath):
         raise CLIError(f"Change working dir failed. {str(error)}") from error
 
 
-def file_exits(filepath):
+def file_exists(filepath):
+    ''' test if a file exists '''
+
     if not os.path.exists(filepath):
         return False
     if not os.path.isfile(filepath) and access(filepath, R_OK):
@@ -65,6 +117,8 @@ def file_exits(filepath):
 
 
 def file_read_content(filepath):
+    ''' Return content of file '''
+
     try:
         with open(filepath, "r") as in_fh:
             return in_fh.read()
@@ -77,7 +131,6 @@ def file_http_read_json_content(filepath):
         return r.json()
     except Exception as error:
         raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
-
 
 def file_write_content(filepath, content):
     try:
@@ -94,6 +147,8 @@ def file_http_write_json_content(filepath, content):
 
 
 def json_write_to_file(filepath, data):
+    ''' serialize data into file '''
+
     try:
         with open(filepath, "w") as outfile:
             json.dump(data, outfile)
@@ -102,6 +157,8 @@ def json_write_to_file(filepath, data):
 
 
 def json_load(content):
+    ''' de serialize string content '''
+
     try:
         return json.loads(content)
     except JSONDecodeError as error:
@@ -109,7 +166,8 @@ def json_load(content):
 
 
 def read_param_file(filepath):
-    if not file_exits(filepath):
+
+    if not file_exists(filepath):
         raise CLIError(f"Failed to read parameter file '{filepath}'.")
 
     data = file_read_content(filepath)
@@ -144,7 +202,7 @@ def is_equal_or_in(value1, value2):
 
     if isinstance(value2, list):
         return value1 in value2
-    elif isinstance(value2, str):
+    if isinstance(value2, str):
         return value1 == value2
 
     raise CLIError(f"unsupported date type '{type(value2)}', {value2}")
@@ -153,10 +211,9 @@ def is_equal_or_in(value1, value2):
 def is_part_of(item, valid_list):
     if isinstance(item, list):
         return set(item) <= set(valid_list)
-    elif isinstance(item, str):
+    if isinstance(item, str):
         return item in valid_list
-    else:
-        raise CLIError(f"unsupported date type '{type(item)}', {item}")
+    raise CLIError(f"unsupported date type '{type(item)}', {item}")
 
 
 def find_the_right_dir(config_up_dir, config_dir):
@@ -180,9 +237,11 @@ def find_the_right_file(config_up_location, provisioner_name, file_extension, co
         raise CLIError(f"Can't find {file_extension} file. Please configure 'up' option.")
     return up_location
 
-def random_string(length, option=['lower','upper']):
+def random_string(length, option=None):
     ''' Create a random string of a given length '''
 
+    if option is None:
+        option = [ 'lower', 'upper' ]
     letters = ""
     if "upper" in option or "all" in option:
         letters += string.ascii_uppercase

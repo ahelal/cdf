@@ -18,11 +18,6 @@ RECURSION_LIMIT = 5
 def run_hook_lifecycle(cobj, event):
     """
     Loop through defined hooks and run all hooks attached to event.
-
-    Args:
-        co: Config object.
-        event: Event as defined in parser i.e. pre-up, up, ...
-
     Returns: None
     """
     for hook_name in cobj.data[CONFIG_HOOKS]:
@@ -34,13 +29,10 @@ def run_hook_lifecycle(cobj, event):
 def run_hook(cobj, hook_args):
     """
     Loop through defined hooks and run all hooks attached to event.
-
-    Args:
-        cobj: Config object.
-        event: Event as defined in parser i.e. pre-up, up, ...
-
     Returns: None
     """
+
+    cobj.interpolate_delayed_variable()
     extra_vars = {"args": hook_args}
     hook_name = hook_args[0]
     cobj.state.add_event(f"Running hook. hook args '{hook_args[1:]}'", hook=hook_name, flush=True)

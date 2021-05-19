@@ -5,7 +5,7 @@ from datetime import datetime
 import semver
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import json_write_to_file, file_exits, file_read_content, json_load, file_http_write_json_content, file_http_read_json_content
+from azext_cdf.utils import json_write_to_file, file_exists, file_read_content, json_load, file_http_write_json_content, file_http_read_json_content
 from azext_cdf.version import VERSION
 
 STATE_PHASE_UNKNOWN = "unknown"
@@ -130,7 +130,7 @@ class State():
                     self.state_db[STATE_HOOKS_RESULT][config_hook][config_op] = {}
 
     def _read_state(self):
-        if self.state_file and file_exits(self.state_file):
+        if self.state_file and file_exists(self.state_file):
             # state file exists
             try:
                 state_str = file_read_content(self.state_file)

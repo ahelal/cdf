@@ -30,5 +30,6 @@ def load_arguments(self, _):
         context.argument("confirm", options_list=["--yes", "-y"], help="Run hook even if an phase or status are not ready. (Might corrupt state)", default=None)
 
     with self.argument_context("cdf test") as context:
-        context.argument("fail", options_list=["--fail", "-f"], help="exits after first failure rather then go through all tests.", default=False)
+        context.argument("exit_on_first_error", options_list=["--exit-onerror", "-e"], help="Exit on first failure rather then go through all tests.", default=False)
+        context.argument("always_clean_up", options_list=["--always_clean", "-a"], help="Always de-provision resources to avoid dangling resources.", default=False)
         context.positional("test_args", nargs="*", help="Test name to run. If none provided will run all.", default=None)
