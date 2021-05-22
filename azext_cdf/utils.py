@@ -37,14 +37,18 @@ class Progress():
         if self.pseudo:
             return
         self.controller.begin(message=msg)
+        self.controller.update()
     def end(self, msg=None):
         ''' end message '''
         if self.pseudo:
             return
         self.controller.end(message=msg)
+        self.stop()
     def stop(self):
-        ''' NoOps '''
-        return
+        ''' stop progress '''
+        if self.pseudo:
+            return
+        self.controller.stop()
     def update_progress(self):
         ''' NoOps '''
         return

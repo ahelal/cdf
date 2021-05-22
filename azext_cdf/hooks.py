@@ -46,7 +46,6 @@ def run_hook(cobj, hook_args):
         cobj.state.add_event(f"Error during hook execution {str(error)}", hook=hook_name, flush=True)
         raise
 
-
 def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     hook_name = hook_args[0]
     operation_num = 0
@@ -94,7 +93,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
             stdout, stderr = "", ""
 
         if operation.get("name", False):
-            cobj.state.set_hook_state(hook=hook_name, op=operation["name"], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
+            cobj.state.set_hook_state(hook=hook_name, op_name=operation["name"], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
             cobj.update_hooks_result(cobj.state.result_hooks)
     return True
 

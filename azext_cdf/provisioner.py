@@ -27,6 +27,8 @@ def _resource_group_exists(cmd, resource_group):
         return True
 
 def de_provision(cmd, cobj):
+    ''' de provision a provisioned service'''
+
     if cobj.provisioner == "bicep" or cobj.provisioner == "arm":
         _empty_deployment(cmd, cobj)
     elif cobj.provisioner == "terraform":
@@ -43,7 +45,6 @@ def de_provision(cmd, cobj):
             no_prompt=False
         )
     cobj.state.set_result(outputs={}, resources={}, flush=True)
-
     if cobj.managed_resource and _resource_group_exists(cmd, cobj.resource_group_name):
         delete_resource(cmd, resource_ids=[f"/subscriptions/{get_subscription_id(cmd.cli_ctx)}/resourceGroups/{cobj.resource_group_name}"])
 
@@ -110,15 +111,13 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
         process = subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=False)
         process.check_returncode()
         return process.stdout.decode("utf-8"), process.stderr.decode("utf-8")
-    except subprocess.CalledProcessError as error:
+    except (subprocess.CalledProcessError, FileNotFoundError) as error:
+        context = f"Run command error. {str(error)}\nstdout: {stdout}\nstderr: {stderr}"
         if process:
             stdout = process.stdout.decode('utf-8')
             stderr = process.stderr.decode('utf-8')
-        context = f"Run command error. {str(error)}\nstdout: {stdout}\nstderr: {stderr}"
-        if "process" in locals():
             context = f"{context}\n{process.stderr.decode('utf-8')}"
         raise CLIError(context) from error
-
 
 def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False, complete_deployment=False):
     '''
@@ -129,7 +128,6 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, locatio
     '''
     arm_template_file = f"{tmp_dir}/targetfile.json"
     _logger.debug(" Building bicep file in tmp dir %s", arm_template_file)
-    # build_bicep_file(cmd, [f"{bicep_file}", "--outfile", f"{arm_template_file}"])
     build_bicep_file(cmd, bicep_file, outfile=arm_template_file)
 
     return run_arm_deployment(

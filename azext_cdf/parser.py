@@ -3,6 +3,7 @@
 import os
 import platform
 import yaml
+import schema
 
 from knack.util import CLIError
 from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
@@ -11,7 +12,6 @@ from jinja2.exceptions import UndefinedError, TemplateSyntaxError
 from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname,random_string
 from azext_cdf.state import State
-
 FIRST_PHASE = 1
 SECOND_PHASE = 2
 # Runtime vars
@@ -37,7 +37,9 @@ CONFIG_PARAMS = "params"
 CONFIG_STATE_FILENAME = "state_filename"
 CONFIG_STATE_FILEPATH = "state_Path"
 CONFIG_HOOKS = "hooks"
+CONFIG_TESTS = "tests"
 CONFIG_CDF = "cdf"
+CONFIG_FILE = "file"
 CONFIG_DEPLOYMENT_COMPLETE = "complete_deployment"
 CONFIG_STATE_FILEPATH_DEFAULT = "file://{{ cdf.tmp_dir }}"
 CONFIG_STATE_FILENAME_DEFAULT = "state.json"
@@ -56,7 +58,6 @@ def _include_file(name):
     except Exception as error:
         raise CLIError(f"include_file filter argument '{name}' error. {str(error)}") from error
 
-
 @contextfunction
 def _template_file(ctx, name):
     try:
@@ -67,12 +68,15 @@ def _template_file(ctx, name):
         raise CLIError(f"template_file filter argument '{name}' error. {str(error)}") from error
     return data
 
+def _list_or_tuple_of(sub_schema):
+    return schema.Or((sub_schema,), [sub_schema])
 
 class ConfigParser:
     '''  CDF yaml config parser class '''
 
     def __init__(self, cdf_yml_filepath, remove_tmp=False, override_state=None, test=None):
         self.data = {}
+        self.state = {}
         self.first_phase_vars = {}
         self.second_phase_vars = {}
         self._delayed_vars = []
@@ -88,7 +92,7 @@ class ConfigParser:
                         Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
                         Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
                         Optional("mode", default='wait'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_MODE),
-                        Optional("cwd", default=None): str,
+                        Optional("cwd"): str,
                         "args": Or(str, list),
                     }
                 ],
@@ -97,22 +101,31 @@ class ConfigParser:
                 Optional("run_if", default="true"): str,
             }
         }
-        test_schema = {
-         str: {
-            Optional("file"): str,
-            Optional(CONFIG_NAME): And(str, len),
-            Optional(CONFIG_DESCRIPTION, default=""): And(str, len),
-            Optional(CONFIG_RG): And(str, len),
-            Optional(CONFIG_LOCATION): And(str, len),
-            Optional(CONFIG_RG_MANAGED, default=True): bool,
-            Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
-            Optional(CONFIG_UP, default=None): And(str, len),
-            # Optional('vars_file', default=[]): Or(str,list),
-            Optional(CONFIG_VARS, default={}): dict,
-            Optional(CONFIG_PARAMS, default={}): dict,
-         }
+        expect_schema = {
+            Optional("fail", default=False): bool,
+            Optional("assert"): Or(str, list),
+            Optional("cmd"): Or(str, list),
         }
-        schema_def = {
+        test_schema = {
+            str: {
+                Optional(CONFIG_FILE): str,
+                Optional(CONFIG_NAME): And(str, len),
+                Optional(CONFIG_DESCRIPTION, default=""): str,
+                Optional(CONFIG_RG): And(str, len),
+                Optional(CONFIG_LOCATION): And(str, len),
+                Optional(CONFIG_RG_MANAGED, default=True): bool,
+                Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
+                Optional(CONFIG_UP): And(str, len),
+                # Optional('vars_file', default=[]): Or(str,list),
+                Optional(CONFIG_VARS): dict,
+                Optional(CONFIG_PARAMS): dict,
+                Optional("expect"): {
+                    Optional(Or("up", "down")): expect_schema,
+                    Optional("hooks"): _list_or_tuple_of({str: expect_schema}),
+                },
+            }
+        }
+        self.schema_def = {
             CONFIG_NAME: And(str, len),
             CONFIG_RG: And(str, len),
             CONFIG_LOCATION: And(str, len),
@@ -120,29 +133,30 @@ class ConfigParser:
             Optional(CONFIG_RG_MANAGED, default=True): bool,
             Optional(CONFIG_PROVISIONER, default="bicep"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
             Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
-            Optional(CONFIG_UP, default=None): And(str, len),
+            Optional(CONFIG_UP, default=""): str,
             Optional(CONFIG_TMP, default="{{cdf.config_dir}}/.cdf_tmp"): And(str, len),
             # Optional('vars_file', default=[]): Or(str,list),
             Optional(CONFIG_VARS, default={}): dict,
             Optional(CONFIG_PARAMS, default={}): dict,
             Optional(CONFIG_HOOKS, default={}): hooks_schema,
-            Optional("tests", default={}): test_schema,
+            Optional(CONFIG_TESTS, default={}): test_schema,
             Optional(CONFIG_STATE_FILEPATH, default=CONFIG_STATE_FILEPATH_DEFAULT): str,
             Optional(CONFIG_STATE_FILENAME, default=CONFIG_STATE_FILENAME_DEFAULT): str,
         }
-        self._load_validate(cdf_yml_filepath, schema_def)
+        self.data = self._read_config(cdf_yml_filepath)
+        self._validate_conf(cdf_yml_filepath)
         self._setup_jinja2()
+        self._setup_pre_phase_interpolation(cdf_yml_filepath) # pre phase
         self._setup_test()
-        self._setup_first_phase_interpolation(cdf_yml_filepath, override_state, remove_tmp) # First phase
+        self._setup_first_phase_interpolation(override_state, remove_tmp) # First phase
         self._setup_second_phase_variables() # Second phase
         self.update_hooks_result(self.state.result_hooks)
 
-    def _load_validate(self, cdf_yml_filepath, schema_def):
-        self.data = self._read_config(cdf_yml_filepath)
+    def _validate_conf(self, cdf_yml_filepath):
         try:
-            schema = Schema(schema_def)
-            self.data = schema.validate(self.data)
-            self._validate_hooks()
+            schema_obj = Schema(self.schema_def)
+            self.data = schema_obj.validate(self.data)
+            self._extra_validate()
         except SchemaWrongKeyError as error:
             raise CLIError(f"config schema error 'SchemaWrongKeyError' in '{cdf_yml_filepath}' an unexpected key is detected: {str(error)}") from error
         except SchemaMissingKeyError as error:
@@ -150,14 +164,23 @@ class ConfigParser:
         except SchemaError as error:
             raise CLIError(f"config schema error 'SchemaError' in '{cdf_yml_filepath}' a general schema violation: {str(error)}") from error
 
-    def _validate_hooks(self):
-        for hook_name, hook_value in self.data[CONFIG_HOOKS].items():
+    def _extra_validate(self):
+        ''' validation not covered by schema '''
+        hooks = []
+        for hook_name, hook_value in self.hooks_dict:
+            hooks.append(hook_name)
             if hook_name[0] == "_":
                 raise CLIError(f"Hook names '{hook_name}' can't start with '_'")
             for operation in hook_value.get("ops"):
                 op_name = operation.get("name", " ")
                 if op_name[0] == "_":
                     raise CLIError(f"op names '{op_name}' can't start with '_'")
+        # TODO Refactor very messy
+        for test in self.data.get(CONFIG_TESTS, {}):
+            for hooks_ops in self.data[CONFIG_TESTS][test].get("expect", {}).get("hooks", []):
+                for hook in hooks_ops:
+                    if hook not in hooks:
+                        raise CLIError(f"unknown hook name'{hook}' in expect test '{test}'")
 
     @staticmethod
     def _read_config(filepath):
@@ -178,23 +201,29 @@ class ConfigParser:
     def _setup_test(self):
         if not self.test:
             return
-        self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test.json"
-        self.data[CONFIG_NAME] = self.data["tests"][self.test].get(CONFIG_NAME, f"{self.data[CONFIG_NAME]}_{self.test}_test")
-        self.data["tests"][self.test][CONFIG_DESCRIPTION] = self.data["tests"][self.test].get(CONFIG_DESCRIPTION, f"{self.data[CONFIG_NAME]} {self.test} test")
-        self.data[CONFIG_LOCATION] = self.data["tests"][self.test].get(CONFIG_LOCATION, self.data[CONFIG_LOCATION])
-        self.data[CONFIG_RG_MANAGED] = self.data["tests"][self.test].get(CONFIG_RG_MANAGED, self.data[CONFIG_RG_MANAGED])
-        self.data[CONFIG_UP] = self.data["tests"][self.test].get(CONFIG_UP, self.data[CONFIG_UP])
-        self.data[CONFIG_VARS] = self.data["tests"][self.test].get(CONFIG_VARS, self.data[CONFIG_VARS])
-        self.data[CONFIG_PARAMS] = self.data["tests"][self.test].get(CONFIG_PARAMS, self.data[CONFIG_PARAMS])
-        if self.data["tests"][self.test].get(CONFIG_RG, None):
-            self.data[CONFIG_RG] = self.data["tests"][self.test][CONFIG_RG]
+        self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test.json" # override default state file
+        if self.data[CONFIG_TESTS][self.test].get(CONFIG_FILE, False): # load test from another dir
+            self.data[CONFIG_TESTS][self.test][CONFIG_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TESTS][self.test][CONFIG_FILE], f"test {self.test} key {CONFIG_FILE}")
+            test_data = self._read_config(self.data[CONFIG_TESTS][self.test][CONFIG_FILE])
+            self.data[CONFIG_TESTS][self.test] = {**self.data[CONFIG_TESTS][self.test], **test_data}
+            self._validate_conf(self.data[CONFIG_TESTS][self.test][CONFIG_FILE]) # revalidate after loading data
+            # print(yaml.dump(self.data))
+
+        self.data[CONFIG_NAME] = self.data[CONFIG_TESTS][self.test].get(CONFIG_NAME, f"{self.data[CONFIG_NAME]}_{self.test}_test")
+        self.data[CONFIG_TESTS][self.test][CONFIG_DESCRIPTION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_DESCRIPTION, f"{self.data[CONFIG_NAME]} {self.test} test")
+        self.data[CONFIG_LOCATION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_LOCATION, self.data[CONFIG_LOCATION])
+        self.data[CONFIG_RG_MANAGED] = self.data[CONFIG_TESTS][self.test].get(CONFIG_RG_MANAGED, self.data[CONFIG_RG_MANAGED])
+        self.data[CONFIG_UP] = self.data[CONFIG_TESTS][self.test].get(CONFIG_UP, self.data[CONFIG_UP])
+        self.data[CONFIG_VARS] = { **self.data[CONFIG_VARS], **self.data[CONFIG_TESTS][self.test].get(CONFIG_VARS, {}) }
+        self.data[CONFIG_PARAMS] = { **self.data[CONFIG_PARAMS], **self.data[CONFIG_TESTS][self.test].get(CONFIG_PARAMS, {}) }
+
+        if self.data[CONFIG_TESTS][self.test].get(CONFIG_RG, None):
+            self.data[CONFIG_RG] = self.data[CONFIG_TESTS][self.test][CONFIG_RG]
         elif self.data[CONFIG_RG_MANAGED]:
             self.data[CONFIG_RG] = f"{self.data[CONFIG_RG]}_{self.test}_test"
-        # don't do anything use cdf self.data[CONFIG_RG]
+        # Don't do anything use cdf self.data[CONFIG_RG]
 
-    def _setup_first_phase_interpolation(self, cdf_yml_filepath, override_state=None, remove_tmp=False):
-        ''' first phase interpolation '''
-
+    def _setup_pre_phase_interpolation(self, cdf_yml_filepath):
         self.first_phase_vars = {
             CONFIG_CDF: {
                 "version": VERSION,
@@ -207,6 +236,10 @@ class ConfigParser:
             RUNTIME_RUN_ONCE_KEY: RUNTIME_RUN_ONCE,
         }
 
+
+    def _setup_first_phase_interpolation(self, override_state=None, remove_tmp=False):
+        ''' first phase interpolation '''
+
         self.first_phase_vars[CONFIG_CDF][CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], context=f"key {CONFIG_TMP}")
         if remove_tmp: # remove and create tmp dir incase we will download some stuff for templates
             dir_remove(self.tmp_dir)
@@ -217,9 +250,9 @@ class ConfigParser:
             self.data[CONFIG_STATE_FILENAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILENAME], context=f"key {CONFIG_STATE_FILENAME}")
             self.data[CONFIG_STATE_FILEPATH] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILEPATH], context=f"key {CONFIG_STATE_FILEPATH}")
             full_path_state_file = os.path.join(self.data[CONFIG_STATE_FILEPATH], self.data[CONFIG_STATE_FILENAME])
-
         self.state = State(full_path_state_file)  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get # setup store functions in jinja2
+
         self.first_phase_vars[CONFIG_CDF][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
         if CONFIG_VARS in self.data:
             # lazy variable resolve
@@ -234,7 +267,8 @@ class ConfigParser:
         self.first_phase_vars[CONFIG_CDF][CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
         self.first_phase_vars[CONFIG_CDF][CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
         self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP], f"key {CONFIG_UP}")
-        self.state.setup(deployment_name=self.name, resource_group=self.resource_group_name, config_hooks=self.hooks_ops) # setup state
+        # Setup state after interpolation
+        self.state.setup(deployment_name=self.name, resource_group=self.resource_group_name, config_hooks=self._hooks_ops()) 
 
     def _setup_second_phase_variables(self):
         self.second_phase_vars = {
@@ -242,7 +276,7 @@ class ConfigParser:
                 RUNTIME_RESULT_OUTPUTS: {},
                 RUNTIME_RESULT_RESOURCES: {},
             },
-            RUNTIME_HOOKS: self.hooks_ops,
+            RUNTIME_HOOKS: self._hooks_ops(),
         }
         self.second_phase_vars[RUNTIME_RESULT] = self.state.result_up # update results from state
 
@@ -264,8 +298,7 @@ class ConfigParser:
         # raise CLIError(f"unsupported type in interpolate f{type(template)}, '{template}'")
 
     def _interpolate_string(self, string, variables):
-        template_string = self.jinja_env.from_string(string)
-        return template_string.render(variables)
+        return self.jinja_env.from_string(string).render(variables)
 
     def update_hooks_result(self, hooks_output):
         ''' Update all hooks results and make them available as variables to second phase '''
@@ -305,15 +338,12 @@ class ConfigParser:
             variables = self.first_phase_vars
         elif phase == SECOND_PHASE:
             variables = {**self.second_phase_vars, **self.first_phase_vars}
-
         if extra_vars:
             variables = {**variables, **extra_vars}
-
         if context:
             error_context = f"in phase: '{phase}'', Context: '{context}'"
         else:
             error_context = f"in phase '{phase}'"
-
         try:
             return self._interpolate_object(phase, template, variables)
         # except TypeError as e:
@@ -324,6 +354,39 @@ class ConfigParser:
             raise CLIError(f"config interpolation error. {error_context}, undefined variable: {str(error)}") from error
         except TemplateSyntaxError as error:
             raise CLIError(f"config interpolation error. {error_context}, template syntax: {str(error)}") from error
+
+    def get_test(self, test_name, expect=None, hook=None):
+        test_obj = self.data.get(CONFIG_TESTS, {}).get(test_name, {})
+        if expect is None and hook is None:
+            return test_obj
+        if expect:
+            return test_obj.get("expect", {}).get(expect, {})
+        for expect_hook in test_obj.get("expect", {}).get("hooks", []):
+            if hook in expect_hook:
+                return expect_hook.get(hook)
+        return {}
+
+    def test_hooks(self, test_name):
+        ''' returns all hooks in a test as list '''
+
+        hooks = []
+        for k in self.data.get(CONFIG_TESTS, {}).get(test_name, {}).get("expect", {}).get("hooks", []):
+            hooks.append(list(k.keys())[0])
+        return hooks
+
+    def _hooks_ops(self):
+        ''' returns ops in hooks '''
+
+        output_hooks = {}
+        for hook_k, hook_v in self.hooks_dict:
+            output_hooks[hook_k] = {}
+            for op_obj in hook_v["ops"]:
+                op_name = op_obj.get("name", False)
+                if op_name:
+                    if op_name in output_hooks[hook_k]:
+                        raise CLIError(f"config schema error duplicate op name '{op_name}'  in hook '{hook_k}")
+                    output_hooks[hook_k][op_name] = {}
+        return output_hooks
 
     @property
     def name(self):
@@ -392,51 +455,26 @@ class ConfigParser:
         return self.data[CONFIG_DEPLOYMENT_COMPLETE]
 
     @property
+    def hooks_dict(self):
+        ''' returns  hooks as dict '''
+
+        return self.data[CONFIG_HOOKS].items()
+
+    @property
     def hook_names(self):
         ''' returns all hook names as list '''
 
         hooks = []
         # if self.data[CONFIG_HOOKS]:
-        for k, _ in self.data[CONFIG_HOOKS].items():
+        for k, _ in self.hooks_dict:
             hooks.append(k)
         return hooks
 
     @property
-    def test_names(self):
+    def tests(self):
         ''' returns all test names as list '''
 
         tests = []
-        for k, _ in self.data["tests"].items():
+        for k, _ in self.data[CONFIG_TESTS].items():
             tests.append(k)
         return tests
-
-    @property
-    def hook_table(self):
-        ''' Return the hook dict '''
-
-        output_hooks = []
-        # if self.data[CONFIG_HOOKS]:
-        for key, value in self.data[CONFIG_HOOKS].items():
-            lifecycle = value["lifecycle"]
-            if isinstance(lifecycle, str):
-                lifecycle = [lifecycle]
-            output_hooks.append({"name": key, "description": value["description"], "lifecycle": lifecycle})
-        return output_hooks
-
-    @property
-    def hooks_ops(self):
-        ''' returns ops in hooks '''
-
-        output_hooks = {}
-        if not self.data[CONFIG_HOOKS]:
-            return output_hooks
-
-        for hook_k, hook_v in self.data[CONFIG_HOOKS].items():
-            output_hooks[hook_k] = {}
-            for op_obj in hook_v["ops"]:
-                op_name = op_obj.get("name", False)
-                if op_name:
-                    if op_name in output_hooks[hook_k]:
-                        raise CLIError(f"config schema error duplicate op name '{op_name}'  in hook '{hook_k}")
-                    output_hooks[hook_k][op_name] = {}
-        return output_hooks

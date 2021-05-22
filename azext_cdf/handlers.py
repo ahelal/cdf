@@ -25,22 +25,25 @@ _logger = get_logger(__name__)
 CONFIG_DEFAULT = ".cdf.yml"
 
 # pylint: disable=unused-argument
-def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_args=None, working_dir=None, state_file=None, always_clean_up=False):
+def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_args=None, working_dir=None, state_file=None, always_clean_up=False, always_keep=False):
     """ test handler function. Run all tests or specific ones """
 
+    if always_clean_up and always_keep:
+        raise CLIError("You can only use one of flags 'alway-clean' or 'always-keep'.")
     working_dir = os.path.realpath(working_dir)
     cobj, cwd = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     Progress(cmd, pseudo=True) # hacky way to disable default progress animation
     dir_change_working(cwd)
     if test_args:
         for test in test_args:
-            if not test in cobj.test_names:
-                raise CLIError(f"unknown test name '{test}', Supported hooks '{cobj.test_names}")
+            if not test in cobj.tests:
+                raise CLIError(f"unknown test name '{test}', Supported hooks '{cobj.tests}")
     else:
-        test_args = cobj.test_names
+        test_args = cobj.tests
 
-    results, one_test_failed = run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir, state_file, always_clean_up)
+    results, one_test_failed = run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir, state_file, always_clean_up, always_keep)
     # print status to screen
+    # gen = (x for x in xyz if x not in a)
     if one_test_failed:
         for test in results:
             if results[test]["failed"]:
@@ -62,7 +65,13 @@ def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, c
 
     cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     if not hook_args:
-        return cobj.hook_table
+        output_hooks = []
+        for key, value in cobj.hooks_dict:
+            lifecycle = value["lifecycle"]
+            if isinstance(lifecycle, str):
+                lifecycle = [lifecycle]
+            output_hooks.append({"name": key, "description": value["description"], "lifecycle": lifecycle})
+        return output_hooks
 
     hook_name = hook_args[0]  # hook is the first arg
     hooks_names = cobj.hook_names
@@ -104,10 +113,12 @@ def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_fi
     )
 
 
-def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
+def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None, validate=False):
     ''' debug config handler, dump the configuration file'''
 
     cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    if validate:
+        return None
     return cobj.config
 
 
