@@ -41,16 +41,17 @@ def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_arg
     else:
         test_args = cobj.tests
 
-    results, one_test_failed = run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir, state_file, always_clean_up, always_keep)
+    results = run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir, state_file, always_clean_up, always_keep)
     # print status to screen
     # gen = (x for x in xyz if x not in a)
+    one_test_failed = False
+    for test in results:
+        if results[test]["failed"]:
+            one_test_failed = True
+            _logger.warning(results[test])
     if one_test_failed:
-        for test in results:
-            if results[test]["failed"]:
-                _logger.warning(results[test])
         raise CLIError("At-least on test failed")
     return results
-
 
 def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None, state_file=None):
     ''' init handler '''

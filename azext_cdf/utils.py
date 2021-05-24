@@ -18,6 +18,7 @@ import azure.cli.core.commands.progress as progress
 
 logger = get_logger(__name__)
 
+# pylint: disable=no-self-use
 class Progress():
     ''' Progress message'''
     def __init__(self, cmd, pseudo=True):
@@ -28,8 +29,7 @@ class Progress():
             return
         self.controller = progress.ProgressHook()
         self.controller.init_progress(progress.get_progress_view())
-
-    def init_progress(self, progress_view=None):
+    def init_progress(self, _):
         ''' NoOps '''
         return
     def begin(self, msg=None):
@@ -119,7 +119,6 @@ def file_exists(filepath):
         return False
     return True
 
-
 def file_read_content(filepath):
     ''' Return content of file '''
 
@@ -137,6 +136,7 @@ def file_http_read_json_content(filepath):
         raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
 
 def file_write_content(filepath, content):
+    ''' write content to a file '''
     try:
         with open(filepath, "w") as file_in:
             file_in.write(content)
@@ -162,7 +162,6 @@ def json_write_to_file(filepath, data):
 
 def json_load(content):
     ''' de serialize string content '''
-
     try:
         return json.loads(content)
     except JSONDecodeError as error:
@@ -170,11 +169,10 @@ def json_load(content):
 
 
 def read_param_file(filepath):
-
-    if not file_exists(filepath):
-        raise CLIError(f"Failed to read parameter file '{filepath}'.")
+    ''' read a json parameters file '''
 
     data = file_read_content(filepath)
+
     try:  # try JSON
         param_dict = json.loads(data)
         if ("$schema" in param_dict) or ("parameters" in param_dict):
@@ -221,11 +219,14 @@ def is_part_of(item, valid_list):
 
 
 def find_the_right_dir(config_up_dir, config_dir):
+    ''' find a terraform dir '''
     if config_up_dir:
         return config_up_dir
     return config_dir
 
 def find_the_right_file(config_up_location, provisioner_name, file_extension, config_dir):
+    ''' find a bicep or arm json file in a dir'''
+
     if config_up_location:
         logger.debug("Using %s file from up argument %s.", provisioner_name, config_up_location)
         return config_up_location

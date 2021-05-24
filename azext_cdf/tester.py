@@ -122,7 +122,6 @@ def run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir
     """ test handler function. Run all tests or specific ones """
 
     results = {}
-    one_test_failed = False
     for test_name in test_args:
         phase_params = { "test_name": test_name, "exit_on_first_error": exit_on_first_error, "always_clean_up": always_clean_up, "always_keep": always_keep }
         results[test_name] = { "failed": False }
@@ -136,7 +135,6 @@ def run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir
         #### UP expect
         _phase_cordinator(cmd, test_cobj, _run_expect_tests, "provision expect", {**phase_params, **{"fail": False}}, expect_obj, results)
         if results[test_name]["failed"]: continue
-
 
         #### RUN HOOKS
         for hook in test_cobj.test_hooks(test_name=test_name):
@@ -163,11 +161,4 @@ def run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir
     # 6. write tests to state
 
     # TODO write tests to state
-    # print status to screen
-    for test in results:
-        if results[test]["failed"]:
-            one_test_failed = True
-            _logger.warning(results[test])
-    if one_test_failed:
-        raise CLIError("At-least on test failed")
-    return results, one_test_failed
+    return results

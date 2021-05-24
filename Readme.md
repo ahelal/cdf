@@ -88,7 +88,7 @@ TODO
 ##### call
 TODO
 
-### Hooks args
+#### Hooks args
 
 You can also pass extra arguments to your hook 
 
@@ -106,9 +106,14 @@ All ['info', 'option1', 'option2']
 Hook=info First=option1 Second=option2
 ```
 
-### Life cycle 
+#### Life cycle 
 
 TODO
+
+#### Conditional execution 
+
+TODO
+
 
 ## Template
 
@@ -150,6 +155,14 @@ You can also access the `resources` created if your using `arm or bicep` provisi
 
 TODO
 
+## Tests
+
+TODO
+
+## Credentials in state
+
+TODO
+
 ## Help 
 
 `az cdf --help`
@@ -158,10 +171,13 @@ Check the examples https://github.com/ahelal/cdf-examples
 
 ## TODO
 
-* add jinja2 test to check dir, file, and filter for json/yaml
+* Capture stdout, stderr in tests
+* save test results in state 
+* Lock during ops and hooks
 * Tests :)
-* Implement test handler and test lifecycle
-* Implement generic rest interface 
+* change the filename from targetfile to deployment name
+* add jinja2 test to check dir, file, and filter for json/yaml
+* HTTP get filter in jinja2
 * Status should attempt to reconcile with ARM and update real status
 * Check if a deployment is running and connect instead of redeploying or deleting
-* HTTP get filter in jinja2
+* Implement generic rest interface to run cdf by HTTP2

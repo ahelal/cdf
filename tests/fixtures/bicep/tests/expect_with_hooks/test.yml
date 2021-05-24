@@ -1,0 +1,28 @@
+description: "test file"
+params:
+  name: "cdf_keyc"
+  location: "eastus2"
+expect:
+  up:
+    fail: false
+    cmd:
+      - \{{ "/usr/bin/true" }}
+      - touch /tmp/absd
+      - /usr/bin/true
+    assert:
+      - True
+      - "{{ 1 == 1 }}"
+
+  down:
+    fail: false
+    # assert: "asdasds"
+
+  hooks:
+    - recursion:
+        fail: false
+        cmd: "touch /tmp/recursion"
+        # assert: ""
+    - pre-up:
+        fail: false
+        cmd: "touc /tmp/pre-up"
+        # assert: ""

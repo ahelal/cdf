@@ -48,15 +48,15 @@ def run_hook(cobj, hook_args):
 
 def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     hook_name = hook_args[0]
+    if recursion_n > RECURSION_LIMIT:
+        raise CLIError(f"Call recursion limit reached {recursion_n - 1} hook: {hook_name}")
+
     operation_num = 0
     hook = cobj.data[CONFIG_HOOKS][hook_name]
     _logger.info("Running hook:%s, Args:%s", hook_name, hook_args)
     if not _evaluate_condition(cobj, hook_name, hook, extra_vars):
         _logger.debug("Condition for hook %s evaluted to false", hook_name)
         return False
-
-    if recursion_n > RECURSION_LIMIT:
-        raise CLIError(f"Call recursion limit reached {recursion_n - 1}")
 
     try:
         hook = cobj.data[CONFIG_HOOKS][hook_name]
@@ -75,11 +75,8 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
             continue  # Skip
 
         op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], extra_vars=extra_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
-        mode = operation.get("mode")
         op_cwd = cobj.interpolate(phase=SECOND_PHASE, template=operation.get("cwd", None), extra_vars=extra_vars, context=f"az-cli cwd interpolation '{ops_name}' in hook '{hook_name}'")
-        interactive = False
-        if mode == "interactive":
-            interactive = True
+        interactive = operation.get("mode") == "interactive"
         if operation["type"] == "az":
             stdout, stderr = _run_az(hook_name, ops_name, op_args, cwd=op_cwd)
         elif operation["type"] == "cmd":
@@ -151,9 +148,9 @@ def _evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
     run_if = run_if.strip()
     if run_if.lower() in ["true", "1", "t", "y", "yes"]:
         return True
-    elif run_if.lower() in ["false", "0", "f", "n", "no"]:
+    if run_if.lower() in ["false", "0", "f", "n", "no"]:
         return False
-    elif RUNTIME_RUN_ONCE in run_if:
+    if RUNTIME_RUN_ONCE in run_if:
         condition = cobj.state.result_hooks[hook_name].get("_condition", {})
         ran = condition.get("ran", False)
         return not ran

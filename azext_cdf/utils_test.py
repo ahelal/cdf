@@ -3,20 +3,20 @@
 import unittest
 import tempfile
 import shutil
-from azext_cdf.utils import file_exits
-
+from azext_cdf.utils import file_exists
+# pylint: disable=missing-class-docstring,missing-function-docstring
 class TestFileExits(unittest.TestCase):
     def setUp(self):
         self.dirpath = tempfile.mkdtemp()
         self.file = f'{self.dirpath}/example.txt'
         with open(self.file, 'w') as the_file:
             the_file.write('Hello')
-    def test_fileExitsTrue(self):
-        self.assertTrue(file_exits(self.file))
-    def test_fileExitsFalse(self):
-        self.assertFalse(file_exits(f'{self.file}aa'))
-    def test_dirExitsFalse(self):
-        self.assertFalse(file_exits(self.dirpath))
+    def test_file_exits(self):
+        self.assertTrue(file_exists(self.file))
+    def test_file_doest_not_exits(self):
+        self.assertFalse(file_exists(f'{self.file}aa'))
+    def test_dir_exits(self):
+        self.assertFalse(file_exists(self.dirpath))
         # with self.assertRaises(TypeError):
         #     s.split(2)
         # self.assertEqual('foo'.upper(), 'FOO')

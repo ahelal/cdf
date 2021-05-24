@@ -87,7 +87,7 @@ class ConfigParser:
             str: {
                 "ops": [
                     {
-                        Optional("name"): str,
+                        Optional(CONFIG_NAME): str,
                         Optional(CONFIG_DESCRIPTION, default=""): str,
                         Optional("type", default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
                         Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
@@ -172,7 +172,7 @@ class ConfigParser:
             if hook_name[0] == "_":
                 raise CLIError(f"Hook names '{hook_name}' can't start with '_'")
             for operation in hook_value.get("ops"):
-                op_name = operation.get("name", " ")
+                op_name = operation.get(CONFIG_NAME, " ")
                 if op_name[0] == "_":
                     raise CLIError(f"op names '{op_name}' can't start with '_'")
         # TODO Refactor very messy
@@ -201,7 +201,7 @@ class ConfigParser:
     def _setup_test(self):
         if not self.test:
             return
-        self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test.json" # override default state file
+        self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test_state.json" # override default state file
         if self.data[CONFIG_TESTS][self.test].get(CONFIG_FILE, False): # load test from another dir
             self.data[CONFIG_TESTS][self.test][CONFIG_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TESTS][self.test][CONFIG_FILE], f"test {self.test} key {CONFIG_FILE}")
             test_data = self._read_config(self.data[CONFIG_TESTS][self.test][CONFIG_FILE])
@@ -250,6 +250,7 @@ class ConfigParser:
             self.data[CONFIG_STATE_FILENAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILENAME], context=f"key {CONFIG_STATE_FILENAME}")
             self.data[CONFIG_STATE_FILEPATH] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILEPATH], context=f"key {CONFIG_STATE_FILEPATH}")
             full_path_state_file = os.path.join(self.data[CONFIG_STATE_FILEPATH], self.data[CONFIG_STATE_FILENAME])
+
         self.state = State(full_path_state_file)  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get # setup store functions in jinja2
 
@@ -263,12 +264,12 @@ class ConfigParser:
                     if "result" in str(error):
                         self._delayed_vars.append(key)
                     else:
-                        raise
+                        raise CLIError() from error
         self.first_phase_vars[CONFIG_CDF][CONFIG_RG] = self.interpolate(FIRST_PHASE, self.data[CONFIG_RG], f"key {CONFIG_RG}")
         self.first_phase_vars[CONFIG_CDF][CONFIG_LOCATION] = self.interpolate(FIRST_PHASE, self.data[CONFIG_LOCATION], f"key {CONFIG_LOCATION}")
         self.data[CONFIG_UP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_UP], f"key {CONFIG_UP}")
         # Setup state after interpolation
-        self.state.setup(deployment_name=self.name, resource_group=self.resource_group_name, config_hooks=self._hooks_ops()) 
+        self.state.setup(deployment_name=self.name, resource_group=self.resource_group_name, config_hooks=self._hooks_ops())
 
     def _setup_second_phase_variables(self):
         self.second_phase_vars = {
@@ -300,10 +301,31 @@ class ConfigParser:
     def _interpolate_string(self, string, variables):
         return self.jinja_env.from_string(string).render(variables)
 
-    def update_hooks_result(self, hooks_output):
-        ''' Update all hooks results and make them available as variables to second phase '''
+    def _interpolate_pre_up_element(self, obj):
+        if isinstance(obj, (list, set)):
+            for i in range(len(obj)):
+                obj[i] = self._interpolate_pre_up_element(obj[i])
+        elif isinstance(obj, dict):
+            for key in obj:
+                obj[key] = self._interpolate_pre_up_element(obj[key])
+        elif isinstance(obj, str):
+            obj = obj = self.interpolate(FIRST_PHASE, obj, f"variables in config in delayed interpolate '{obj}'")
+        return obj
 
-        self.second_phase_vars[RUNTIME_HOOKS] = hooks_output
+    def _hooks_ops(self):
+        ''' returns ops in hooks '''
+
+        output_hooks = {}
+        for hook_k, hook_v in self.hooks_dict:
+            output_hooks[hook_k] = {}
+            for op_obj in hook_v["ops"]:
+                op_name = op_obj.get(CONFIG_NAME, False)
+                if op_name:
+                    if op_name in output_hooks[hook_k]:
+                        raise CLIError(f"config schema error duplicate op name '{op_name}'  in hook '{hook_k}")
+                    output_hooks[hook_k][op_name] = {}
+        return output_hooks
+
 
     def interpolate_delayed_variable(self):
         ''' Interpolate delayed variables that was not caught in earlier phases '''
@@ -318,17 +340,6 @@ class ConfigParser:
         if CONFIG_PARAMS in self.data:
             self._interpolate_pre_up_element(self.data)
 
-    def _interpolate_pre_up_element(self, obj):
-        if isinstance(obj, (list, set)):
-            for i in range(len(obj)):
-                obj[i] = self._interpolate_pre_up_element(obj[i])
-        elif isinstance(obj, dict):
-            for key in obj:
-                obj[key] = self._interpolate_pre_up_element(obj[key])
-        elif isinstance(obj, str):
-            obj = obj = self.interpolate(FIRST_PHASE, obj, f"variables in config in delayed interpolate '{obj}'")
-        return obj
-
     def interpolate(self, phase, template, context=None, extra_vars=None, raw_undefined_error=False):
         ''' Interpolate a string template '''
 
@@ -338,8 +349,10 @@ class ConfigParser:
             variables = self.first_phase_vars
         elif phase == SECOND_PHASE:
             variables = {**self.second_phase_vars, **self.first_phase_vars}
+
         if extra_vars:
-            variables = {**variables, **extra_vars}
+            variables[CONFIG_VARS] = {**variables[CONFIG_VARS], **extra_vars}
+
         if context:
             error_context = f"in phase: '{phase}'', Context: '{context}'"
         else:
@@ -350,12 +363,19 @@ class ConfigParser:
         #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
         except UndefinedError as error:
             if raw_undefined_error:
-                raise
+                raise CLIError(f"undefined variable {str(error)}") from error
             raise CLIError(f"config interpolation error. {error_context}, undefined variable: {str(error)}") from error
         except TemplateSyntaxError as error:
             raise CLIError(f"config interpolation error. {error_context}, template syntax: {str(error)}") from error
 
+    def update_hooks_result(self, hooks_output):
+        ''' Update all hooks results and make them available as variables to second phase '''
+
+        self.second_phase_vars[RUNTIME_HOOKS] = hooks_output
+
     def get_test(self, test_name, expect=None, hook=None):
+        ''' Return test dic '''
+
         test_obj = self.data.get(CONFIG_TESTS, {}).get(test_name, {})
         if expect is None and hook is None:
             return test_obj
@@ -374,19 +394,6 @@ class ConfigParser:
             hooks.append(list(k.keys())[0])
         return hooks
 
-    def _hooks_ops(self):
-        ''' returns ops in hooks '''
-
-        output_hooks = {}
-        for hook_k, hook_v in self.hooks_dict:
-            output_hooks[hook_k] = {}
-            for op_obj in hook_v["ops"]:
-                op_name = op_obj.get("name", False)
-                if op_name:
-                    if op_name in output_hooks[hook_k]:
-                        raise CLIError(f"config schema error duplicate op name '{op_name}'  in hook '{hook_k}")
-                    output_hooks[hook_k][op_name] = {}
-        return output_hooks
 
     @property
     def name(self):

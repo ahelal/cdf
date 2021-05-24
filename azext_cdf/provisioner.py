@@ -50,6 +50,8 @@ def de_provision(cmd, cobj):
 
 
 def provision(cmd, cobj):
+    ''' main provision function '''
+
     output_resources, outputs = None, None
     # Run template interpolate
     cobj.interpolate_pre_up()
@@ -163,6 +165,9 @@ def _empty_deployment(cmd, cobj):
         else:
             raise CLIError(error) from error
 
+def _provision_rg_if_needed(cmd, resource_group, location, manage_resource_group):
+    if manage_resource_group:
+        create_resource_group(cmd, rg_name=resource_group, location=location)
 
 def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, location, params=None, manage_resource_group=True, no_prompt=False, complete_deployment=False):
     """
@@ -172,8 +177,7 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
         output
     """
 
-    if manage_resource_group:
-        create_resource_group(cmd, rg_name=resource_group, location=location)
+    _provision_rg_if_needed(cmd, resource_group, location,  manage_resource_group)
     parameters = []
     for key, value in params.items():
         params_obj = [f"{key}={value}"]
@@ -187,17 +191,13 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
     deployment = deploy_arm_template_at_resource_group(
         cmd, resource_group_name=resource_group, template_file=arm_template_file, deployment_name=deployment_name, mode=mode, no_prompt=no_prompt, parameters=parameters, no_wait=False
     )
-
-    output_resources = deployment.result().as_dict().get("properties", {}).get("output_resources", {})
-    output = deployment.result().as_dict().get("properties", {}).get("outputs", {})
-    return output_resources, output
+    return deployment.result().as_dict().get("properties", {}).get("output_resources", {}), deployment.result().as_dict().get("properties", {}).get("outputs", {})
 
 def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     ''' Run terraform apply '''
 
     varsfile = os.path.join(tmp_dir,"terraformvars.json")
-    if manage_resource_group:
-        create_resource_group(cmd, rg_name=resource_group, location=location)
+    _provision_rg_if_needed(cmd, resource_group, location,  manage_resource_group)
     if params:
         json_write_to_file(varsfile, params)
 
@@ -216,15 +216,13 @@ def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_g
         output = json.loads(stdout)
     except subprocess.CalledProcessError as error:
         raise CLIError(f"Error while decoding json from terraform output. Error: {error}") from error
-    output_resources = {}
-    return output_resources, output
+    return  {}, output
 
 def run_terraform_destroy(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     ''' Run terraform destroy '''
 
     varsfile = os.path.join(tmp_dir,"terraformvars.json")
-    if manage_resource_group:
-        create_resource_group(cmd, rg_name=resource_group, location=location)
+    _provision_rg_if_needed(cmd, resource_group, location,  manage_resource_group)
     if params:
         json_write_to_file(varsfile, params)
 

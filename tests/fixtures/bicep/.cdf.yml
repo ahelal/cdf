@@ -1,0 +1,65 @@
+---
+name: "cdf_fixtures_bicep"
+resource_group: "cdf_fixtures_bicep"
+location: "eastus"
+
+params:
+  name: "cdf_key"
+  location: "eastus"
+  key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrs/zJhwDvfjcmXiwlabkZMs7qjA0hl9c3RXBpWYQx2Ps/lhN/I043LsU1zAFPg9P5qaqzVjc73Zky2tZ8qVFKuHAUV8ccwLEwuvWmeqFTK5of6Dt/fuWRbCfpZDcq1nqp+v9bG+OhdNhOUMJFCbFWpHpAP95IOSo9YXeFLdegqMEm8zzgKojYE7RVrrejejmhZcoRMNZj4pxPk/FTqVoTR4C5lzZMBR0XLY/kzq4ay/LfAKyJ+EaNOeFOv/pCIw69DqBDqLiMUwHJLmGkw9azdT6FBXIQhhfeEilItQzfOnzTOh87Xvhv/z0fuhPynUbT6KWX0GO5oTRXE5Xf+TGR"
+
+hooks:
+  recursion:
+    description: "Print recursively till you reach the limit"
+    ops:
+      - type: print
+        args: Print from recursion
+      # - type: call
+      #   args: print
+      - type: cmd
+        args: /bin/sh -c "echo 1 >> /tmp/f.txt"
+
+  pre-up:
+    description: "Print before going up"
+    lifecycle: "pre-up"
+    ops:
+      - name: print_pre_up
+        type: print
+        args: Provisioning '{{cdf.name}}'
+
+  all-up:
+    description: "Print before going up again and also post"
+    lifecycle: ["post-up", "pre-up"]
+    ops:
+      - type: print
+        args: Hook will run in  "post-up", "pre-up"
+
+  post-up:
+    description: "Print after going up"
+    lifecycle: "post-up"
+    ops:
+      - type: print
+        args: Post-up provisioned in {{cdf.resource_group}}
+
+tests:
+  simple:
+    expect:
+      up:
+        fail: false
+
+  expect_to_fail_and_fails:
+    description: "Expect the test to fail and tests fails"
+    params:
+      location: "eastus22"
+    expect:
+      up:
+        fail: true
+
+  expect_to_fail_and_passes:
+    description: "Expect the test to fail but passes"
+    expect:
+      up:
+        fail: true
+
+  expect_with_hooks:
+    file: "{{cdf.config_dir}}/tests/expect_with_hooks/test.yml"
