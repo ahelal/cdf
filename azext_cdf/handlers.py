@@ -5,7 +5,6 @@ import os
 from collections import OrderedDict
 from knack.util import CLIError
 from knack.log import get_logger
-from azure.cli.command_modules.resource.custom import get_deployment_at_resource_group
 from azure.cli.command_modules.resource.custom import run_bicep_command
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
@@ -16,11 +15,11 @@ from azext_cdf.utils import Progress, init_config
 from azext_cdf.hooks import run_hook, run_hook_lifecycle
 from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN # STATE_PHASE_TESTED, STATE_PHASE_TESTING,
 from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR #, STATE_STATUS_FAILED
-from azext_cdf.provisioner import de_provision, provision
+from azext_cdf.provisioner import de_provision, provision, check_deployment_error
 from azext_cdf.tester import run_test
 from azext_cdf.parser import ConfigParser
 
-_logger = get_logger(__name__)
+_LOGGER = get_logger(__name__)
 
 CONFIG_DEFAULT = ".cdf.yml"
 
@@ -48,7 +47,7 @@ def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_arg
     for test in results:
         if results[test]["failed"]:
             one_test_failed = True
-            _logger.warning(results[test])
+            _LOGGER.warning(results[test])
     if one_test_failed:
         raise CLIError("At-least on test failed")
     return results
@@ -58,7 +57,7 @@ def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working
 
     # cobj, _ = init_config(config, False, working_dir)
     # TODO create an initial environment
-    _logger.info("Init")
+    _LOGGER.info("Init")
 
 
 def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, confirm=False, state_file=None):
@@ -146,17 +145,18 @@ def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None,
             raise CLIError(f"{cobj.tmp_dir}/targetfile.json does not exists please run up first")
         arm_deployment = json_load(file_read_content(f"{cobj.tmp_dir}/targetfile.json"))
         deployments_status = []
-        deployment = _check_deployment_error(cmd, resource_group_name=cobj.resource_group_name, deployment_name=cobj.name, deployment_type="Microsoft.Resources/deployments")
+        deployment = check_deployment_error(cmd, resource_group_name=cobj.resource_group_name, deployment_name=cobj.name, deployment_type="Microsoft.Resources/deployments")
         if deployment:
             deployments_status.append(deployment)
 
         for nested_deployment in arm_deployment["resources"]:
-            deployment = _check_deployment_error(cmd, resource_group_name=cobj.resource_group_name, deployment_name=nested_deployment["name"], deployment_type=nested_deployment["type"])
+            deployment = check_deployment_error(cmd, resource_group_name=cobj.resource_group_name, deployment_name=nested_deployment["name"], deployment_type=nested_deployment["type"])
             if deployment:
                 deployments_status.append(deployment)
         return deployments_status
-
-    # TODO add terraform errors
+    if cobj.provisioner == "terraform":
+        raise CLIError('terraform errors not yet supported')
+        # TODO add terraform errors
     return None
 
 def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phase=2, state_file=None):
@@ -177,18 +177,6 @@ def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phas
             return
         except CLIError as error:
             print(f"Error : {str(error)}")
-
-def _check_deployment_error(cmd, resource_group_name, deployment_name, deployment_type):
-    deployment_status = {}
-    if not deployment_type == "Microsoft.Resources/deployments":
-        return deployment_status
-    deployment = get_deployment_at_resource_group(cmd, resource_group_name=resource_group_name, deployment_name=deployment_name)
-    properties = deployment.as_dict().get("properties")
-    if properties.get("provisioning_state") == "Failed":
-        error = properties.get("error")
-        deployment_status.update({"error": error, "name": deployment_name})
-    return deployment_status
-
 
 def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None, state_file=None):
     ''' down handler, Destroy a provisioned environment '''

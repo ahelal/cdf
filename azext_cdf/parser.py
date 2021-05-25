@@ -4,13 +4,13 @@ import os
 import platform
 import yaml
 import schema
+from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 
 from knack.util import CLIError
-from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction, Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError
 from azext_cdf.version import VERSION
-from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname,random_string
+from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname, random_string
 from azext_cdf.state import State
 FIRST_PHASE = 1
 SECOND_PHASE = 2
@@ -175,6 +175,9 @@ class ConfigParser:
                 op_name = operation.get(CONFIG_NAME, " ")
                 if op_name[0] == "_":
                     raise CLIError(f"op names '{op_name}' can't start with '_'")
+                if operation.get("type") == "call" and operation.get("args") not in self.hook_names:
+                    raise CLIError(f"'{op_name}' can't call an undefined hook {operation.get('args')}")
+
         # TODO Refactor very messy
         for test in self.data.get(CONFIG_TESTS, {}):
             for hooks_ops in self.data[CONFIG_TESTS][test].get("expect", {}).get("hooks", []):
@@ -214,8 +217,8 @@ class ConfigParser:
         self.data[CONFIG_LOCATION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_LOCATION, self.data[CONFIG_LOCATION])
         self.data[CONFIG_RG_MANAGED] = self.data[CONFIG_TESTS][self.test].get(CONFIG_RG_MANAGED, self.data[CONFIG_RG_MANAGED])
         self.data[CONFIG_UP] = self.data[CONFIG_TESTS][self.test].get(CONFIG_UP, self.data[CONFIG_UP])
-        self.data[CONFIG_VARS] = { **self.data[CONFIG_VARS], **self.data[CONFIG_TESTS][self.test].get(CONFIG_VARS, {}) }
-        self.data[CONFIG_PARAMS] = { **self.data[CONFIG_PARAMS], **self.data[CONFIG_TESTS][self.test].get(CONFIG_PARAMS, {}) }
+        self.data[CONFIG_VARS] = {**self.data[CONFIG_VARS], **self.data[CONFIG_TESTS][self.test].get(CONFIG_VARS, {})}
+        self.data[CONFIG_PARAMS] = {**self.data[CONFIG_PARAMS], **self.data[CONFIG_TESTS][self.test].get(CONFIG_PARAMS, {})}
 
         if self.data[CONFIG_TESTS][self.test].get(CONFIG_RG, None):
             self.data[CONFIG_RG] = self.data[CONFIG_TESTS][self.test][CONFIG_RG]

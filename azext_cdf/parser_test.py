@@ -13,8 +13,8 @@ from knack.util import CLIError
 from azext_cdf.parser import ConfigParser
 from azext_cdf.version import VERSION
 
-# pylint: disable=missing-class-docstring,missing-function-docstring
-class BasicParser(unittest.TestCase):        
+# pylint: disable=C0111
+class BasicParser(unittest.TestCase):
     def setUp(self):
         self.dirpath = tempfile.mkdtemp()
         self.config = {"name": "cdf_simple", "resource_group": "rg", "location": "loc"}
@@ -42,7 +42,7 @@ class SimpleParser(BasicParser):
         parser = ConfigParser(f"{os.getcwd()}/config.yml", remove_tmp=False, override_state=None, test=None)
         self.assertEqual(parser.name, self.config["name"])
         self.assertEqual(parser.resource_group_name, self.config["resource_group"])
-        self.assertEqual(parser.location,  self.config["location"])
+        self.assertEqual(parser.location, self.config["location"])
         self.assertEqual(parser.managed_resource, True)
         self.assertEqual(parser.tmp_dir, default_tmp_dir)
         self.assertEqual(parser.up_location, '')
@@ -69,7 +69,7 @@ class SimpleParser(BasicParser):
 
     def tearDown(self):
         super().tearDown()
-        shutil.rmtree(f"{os.getcwd()}/.cdf_tmp",ignore_errors=True)
+        shutil.rmtree(f"{os.getcwd()}/.cdf_tmp", ignore_errors=True)
 
 class PathsParser(BasicParser):
     @patch.object(ConfigParser, '_read_config')
@@ -115,8 +115,8 @@ class InterpolateParser(BasicParser):
     @patch.object(ConfigParser, '_read_config')
     def test_first_stage_vars(self, mock_read_config):
         self.config["name"] = "cdf_test_first_stage_vars"
-        self.config["vars"] = { "a": 1, "b": "2", "c": {"a": 1}, "d": False, "e": [1, 2],
-                                "f": "{{cdf.name}}", "g": "{{vars.a}}" }
+        self.config["vars"] = {"a": 1, "b": "2", "c": {"a": 1}, "d": False, "e": [1, 2],
+                               "f": "{{cdf.name}}", "g": "{{vars.a}}"}
         mock_read_config.return_value = self.config
         parser = ConfigParser("/path/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
         self.assertEqual(parser.interpolate(1, "{{vars.a}}.{{vars.b}}"), "1.2")
@@ -134,14 +134,33 @@ class InterpolateParser(BasicParser):
     @patch.object(ConfigParser, '_read_config')
     def test_vars_circle_dep(self, mock_read_config):
         self.config["name"] = "test_vars_circle_dep"
-        self.config["vars"] = { "h": "{{vars.i}}", "i": "{{vars.h}}" }
+        self.config["vars"] = {"h": "{{vars.i}}", "i": "{{vars.h}}"}
         mock_read_config.return_value = self.config
         with self.assertRaises(CLIError) as context:
             ConfigParser("/path/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
         self.assertTrue('undefined variable' in str(context.exception))
-    
+
+    @patch.object(ConfigParser, '_read_config')
+    def test_jinja2_filters(self, mock_read_config):
+        self.config["name"] = "test_jinja2_filters"
+        self.config["vars"] = {"a": 1}
+        mock_read_config.return_value = self.config
+        parser = ConfigParser("/path/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+        # write static file
+        with open(f"{self.dirpath}/static.txt", "w") as static_file:
+            static_file.write("helloStatic")
+        include_file = "{{include_file('" + self.dirpath + "/static.txt') }}"
+        self.assertEqual(parser.interpolate(1, include_file), 'helloStatic')
+        # write template
+        with open(f"{self.dirpath}/template.txt", "w") as jinja2_file:
+            jinja2_file.write("{{cdf.name}}{{vars.a}}")
+        template_file = "{{template_file('" + self.dirpath + "/template.txt') }}"
+        self.assertEqual(parser.interpolate(1, template_file), f'{self.config["name"]}1')
+        inter_len = parser.interpolate(1, "{{random_string(10)}}")
+        self.assertEqual(len(inter_len), 10)
+
     # TODO phase2 tests
     # TODO results tests
-    # TODO filters test
+
 if __name__ == '__main__':
     unittest.main()

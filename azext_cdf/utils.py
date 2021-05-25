@@ -1,13 +1,13 @@
 """ utils """
 
 import os
+from os import access, R_OK
 import glob
 import json
+from json import JSONDecodeError
 import random
 import string
 import shutil
-from os import access, R_OK
-from json import JSONDecodeError
 import requests
 
 import yaml
@@ -16,7 +16,7 @@ from knack.util import CLIError
 import azure.cli.core.commands.progress as progress
 # from azext_cdf.parser import ConfigParser
 
-logger = get_logger(__name__)
+_LOGGER = get_logger(__name__)
 
 # pylint: disable=no-self-use
 class Progress():
@@ -55,6 +55,7 @@ class Progress():
 
 # TODO should be refactored into parser code
 def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None, test=None):
+    ''' return config obj and cwd'''
     cwd = os.getcwd()
     if working_dir:
         dir_change_working(working_dir)
@@ -128,12 +129,13 @@ def file_read_content(filepath):
     except OSError as error:
         raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
 
-def file_http_read_json_content(filepath):
+def file_http_read_json_content(urlpath):
+    ''' get http content'''
     try:
-        r = requests.get(filepath)
-        return r.json()
+        resp = requests.get(urlpath)
+        return resp.json()
     except Exception as error:
-        raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
+        raise CLIError(f"Failed to read file '{urlpath}'. Error: {str(error)}") from error
 
 def file_write_content(filepath, content):
     ''' write content to a file '''
@@ -144,10 +146,12 @@ def file_write_content(filepath, content):
         raise CLIError(f"Failed to write file '{filepath}'. Error: {str(error)}") from error
 
 def file_http_write_json_content(filepath, content):
-    try:
-        r = requests.get(filepath, json=[content])
-    except Exception as error:
-        raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
+    ''' write content do dapr endpoint'''
+    raise CLIError("http write WIP")
+    # try:
+    #     r = requests.get(filepath, json=[content])
+    # except Exception as error:
+    #     raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
 
 
 def json_write_to_file(filepath, data):
@@ -178,13 +182,13 @@ def read_param_file(filepath):
         if ("$schema" in param_dict) or ("parameters" in param_dict):
             return False, True
         return param_dict, False
-    except Exception:
+    except JSONDecodeError:
         pass
 
     try:  # try yaml
         config_dict = yaml.safe_load(data)
         return param_dict, False
-    except Exception:
+    except yaml.YAMLError:
         pass
 
     try:  # try key_value
@@ -211,6 +215,7 @@ def is_equal_or_in(value1, value2):
 
 
 def is_part_of(item, valid_list):
+    ''' returns if item is part of valid_list, valid_list can str, or list '''
     if isinstance(item, list):
         return set(item) <= set(valid_list)
     if isinstance(item, str):
@@ -226,17 +231,17 @@ def find_the_right_dir(config_up_dir, config_dir):
 
 def find_the_right_file(config_up_location, provisioner_name, file_extension, config_dir):
     ''' find a bicep or arm json file in a dir'''
-
+    # TODO need to test this function
     if config_up_location:
-        logger.debug("Using %s file from up argument %s.", provisioner_name, config_up_location)
+        _LOGGER.debug("Using %s file from up argument %s.", provisioner_name, config_up_location)
         return config_up_location
 
     up_location = ""
     for filename in glob.glob(f"{config_dir}/*{file_extension}"):
-        if len(up_location) > 0:
+        if len(up_location) > 1:
             raise CLIError(f"Found more then one {file_extension} file. Please configure 'up' option.")
         up_location = filename
-        logger.debug("Using %s file from globing %s.", provisioner_name, up_location)
+        _LOGGER.debug("Using %s file from globing %s.", provisioner_name, up_location)
 
     if not up_location:
         raise CLIError(f"Can't find {file_extension} file. Please configure 'up' option.")
@@ -246,7 +251,7 @@ def random_string(length, option=None):
     ''' Create a random string of a given length '''
 
     if option is None:
-        option = [ 'lower', 'upper' ]
+        option = ['lower', 'upper']
     letters = ""
     if "upper" in option or "all" in option:
         letters += string.ascii_uppercase

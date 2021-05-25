@@ -36,7 +36,7 @@ STATE_HOOKS_RESULT = "hooks"
 STATE_VERSION = "version"
 STATE_STORE = "store"
 
-logger = get_logger(__name__)
+_LOGGER = get_logger(__name__)
 
 class State():
     ''' The state class '''
@@ -81,7 +81,7 @@ class State():
         elif self.state_db[STATE_PHASE] == STATE_PHASE_UNKNOWN or self.state_db[STATE_PHASE] == STATE_PHASE_DOWN:
             pass
         else:
-            raise CLIError("Resource group already provisioned '{}' requested '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP],resource_group))
+            raise CLIError("Resource group already provisioned '{}' requested '{}', Can't change resource group before destroying.".format(self.state_db[STATE_RESOURCE_GROUP], resource_group))
 
         if self.state_db[STATE_DEPLOYMENT_NAME] is None:
             self.state_db[STATE_DEPLOYMENT_NAME] = deployment_name
@@ -100,9 +100,9 @@ class State():
         state_version = self.state_db["version"]
         version_compare = semver.compare(state_version, VERSION)
         if version_compare == -1:  # state is less then cli
-            logger.warning("Your state file is out date: state version %s CDF version %s. Run `up -r` to rewrite state", state_version, VERSION)
+            _LOGGER.warning("Your state file is out date: state version %s CDF version %s. Run `up -r` to rewrite state", state_version, VERSION)
         elif version_compare == 1:  # state is more then cli
-            logger.warning("Your CDF extension is outdate: state version %s CLI version %s. Upgrade extension", state_version, VERSION)
+            _LOGGER.warning("Your CDF extension is outdate: state version %s CLI version %s. Upgrade extension", state_version, VERSION)
         elif version_compare == 0:  # state is less then cli
             pass
 
@@ -195,7 +195,7 @@ class State():
         self._flush_state(flush)
 
     def set_hook_state(self, hook, op_name, op_data, flush=True):
-        ''' Write hook output to the state file'''
+        ''' Write hook output to the state file '''
 
         # TODO add state success or failure
         if not self.state_db[STATE_HOOKS_RESULT][hook].get(op_name, False):
@@ -211,7 +211,6 @@ class State():
         except KeyError:
             self.state_db[STATE_STORE][key] = value
             return value
-
 
     @property
     def status(self):

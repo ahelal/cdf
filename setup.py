@@ -2,6 +2,7 @@
 
 try:
     from azure_bdist_wheel import cmdclass
+    print(cmdclass)
 except ImportError:
     from distutils import log as logger
     logger.warn("Wheel is not available, disabling bdist_wheel hook")
@@ -43,7 +44,7 @@ setup(
     author='Adham Abdelwahab',
     author_email='',
     url='',
-    long_description='XXXXX',
+    long_description='CDF is an Azure CLI plugin that will make your life easier to develop, test, maintain, share units, and run IaC code in Azure',
     license='MIT',
     classifiers=CLASSIFIERS,
     packages=find_packages(),

@@ -5,6 +5,7 @@ import json
 import os
 from knack.util import CLIError
 from knack.log import get_logger
+from azure.cli.command_modules.resource.custom import get_deployment_at_resource_group
 from azure.cli.command_modules.resource.custom import build_bicep_file
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, delete_resource, show_resource
 from azure.cli.core.commands.client_factory import get_subscription_id
@@ -14,7 +15,32 @@ from azext_cdf.utils import find_the_right_file, find_the_right_dir
 from azext_cdf.parser import CONFIG_PARAMS
 from azext_cdf.utils import json_write_to_file
 
-_logger = get_logger(__name__)
+_LOGGER = get_logger(__name__)
+
+def _empty_deployment(cmd, cobj):
+    # TODO check deployment exists before doing an empty deployment
+    empty_deployment = {
+        "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+        "contentVersion": "1.0.0.0",
+        "parameters": {},
+        "variables": {},
+        "resources": [],
+        "outputs": {},
+    }
+    json_write_to_file(f"{cobj.tmp_dir}/empty_deployment.json", empty_deployment)
+    try:
+        deploy_arm_template_at_resource_group(
+            cmd, resource_group_name=cobj.resource_group_name, template_file=f"{cobj.tmp_dir}/empty_deployment.json", deployment_name=cobj.name, mode="Complete", no_wait=False
+        )
+    except CLIError as error:
+        if "ResourceGroupNotFound" in str(error):
+            pass
+        else:
+            raise CLIError(error) from error
+
+def _provision_rg_if_needed(cmd, resource_group, location, manage_resource_group):
+    if manage_resource_group:
+        create_resource_group(cmd, rg_name=resource_group, location=location)
 
 def _resource_group_exists(cmd, resource_group):
     try:
@@ -69,7 +95,7 @@ def provision(cmd, cobj):
             complete_deployment=cobj.deployment_mode,
         )
     elif cobj.provisioner == "arm":
-        output_resources, outputs =  run_arm_deployment(
+        output_resources, outputs = run_arm_deployment(
             cmd,
             deployment_name=cobj.name,
             arm_template_file=find_the_right_file(cobj.up_location, "arm", "*.json", cobj.config_dir),
@@ -105,7 +131,7 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
     stderr = None
     try:
         cmd_args = [rf"{bin_path}"] + args
-        _logger.debug(" Running a command %s", cmd_args)
+        _LOGGER.debug(" Running a command %s", cmd_args)
         if interactive:
             subprocess.check_call(cmd_args, cwd=cwd)
             return "", ""
@@ -129,7 +155,7 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, locatio
         output
     '''
     arm_template_file = f"{tmp_dir}/targetfile.json"
-    _logger.debug(" Building bicep file in tmp dir %s", arm_template_file)
+    _LOGGER.debug(" Building bicep file in tmp dir %s", arm_template_file)
     build_bicep_file(cmd, bicep_file, outfile=arm_template_file)
 
     return run_arm_deployment(
@@ -144,30 +170,18 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, locatio
         complete_deployment=complete_deployment,
     )
 
-def _empty_deployment(cmd, cobj):
-    # TODO check deployment exists before doing an empty deployment
-    empty_deployment = {
-        "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-        "contentVersion": "1.0.0.0",
-        "parameters": {},
-        "variables": {},
-        "resources": [],
-        "outputs": {},
-    }
-    json_write_to_file(f"{cobj.tmp_dir}/empty_deployment.json", empty_deployment)
-    try:
-        deploy_arm_template_at_resource_group(
-            cmd, resource_group_name=cobj.resource_group_name, template_file=f"{cobj.tmp_dir}/empty_deployment.json", deployment_name=cobj.name, mode="Complete", no_wait=False
-        )
-    except CLIError as error:
-        if "ResourceGroupNotFound" in str(error):
-            pass
-        else:
-            raise CLIError(error) from error
+def check_deployment_error(cmd, resource_group_name, deployment_name, deployment_type):
+    ''' Check arm deployment errors '''
 
-def _provision_rg_if_needed(cmd, resource_group, location, manage_resource_group):
-    if manage_resource_group:
-        create_resource_group(cmd, rg_name=resource_group, location=location)
+    deployment_status = {}
+    if not deployment_type == "Microsoft.Resources/deployments":
+        return deployment_status
+    deployment = get_deployment_at_resource_group(cmd, resource_group_name=resource_group_name, deployment_name=deployment_name)
+    properties = deployment.as_dict().get("properties")
+    if properties.get("provisioning_state") == "Failed":
+        error = properties.get("error")
+        deployment_status.update({"error": error, "name": deployment_name})
+    return deployment_status
 
 def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, location, params=None, manage_resource_group=True, no_prompt=False, complete_deployment=False):
     """
@@ -177,7 +191,7 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
         output
     """
 
-    _provision_rg_if_needed(cmd, resource_group, location,  manage_resource_group)
+    _provision_rg_if_needed(cmd, resource_group, location, manage_resource_group)
     parameters = []
     for key, value in params.items():
         params_obj = [f"{key}={value}"]
@@ -196,8 +210,8 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
 def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     ''' Run terraform apply '''
 
-    varsfile = os.path.join(tmp_dir,"terraformvars.json")
-    _provision_rg_if_needed(cmd, resource_group, location,  manage_resource_group)
+    varsfile = os.path.join(tmp_dir, "terraformvars.json")
+    _provision_rg_if_needed(cmd, resource_group, location, manage_resource_group)
     if params:
         json_write_to_file(varsfile, params)
 
@@ -211,7 +225,7 @@ def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_g
 
     run_command("terraform", args=args, interactive=False, cwd=terraform_dir)
     # TODO fix return
-    stdout, _ = run_command("terraform", args=["output","-json"], interactive=False, cwd=terraform_dir)
+    stdout, _ = run_command("terraform", args=["output", "-json"], interactive=False, cwd=terraform_dir)
     try:
         output = json.loads(stdout)
     except subprocess.CalledProcessError as error:
@@ -221,8 +235,8 @@ def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_g
 def run_terraform_destroy(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     ''' Run terraform destroy '''
 
-    varsfile = os.path.join(tmp_dir,"terraformvars.json")
-    _provision_rg_if_needed(cmd, resource_group, location,  manage_resource_group)
+    varsfile = os.path.join(tmp_dir, "terraformvars.json")
+    _provision_rg_if_needed(cmd, resource_group, location, manage_resource_group)
     if params:
         json_write_to_file(varsfile, params)
 

@@ -10,7 +10,7 @@ from azext_cdf.utils import is_equal_or_in, file_read_content, file_write_conten
 from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE, RUNTIME_RUN_ONCE
 from azext_cdf.provisioner import run_command
 
-_logger = get_logger(__name__)
+_LOGGER = get_logger(__name__)
 
 RECURSION_LIMIT = 5
 
@@ -22,7 +22,7 @@ def run_hook_lifecycle(cobj, event):
     """
     for hook_name in cobj.data[CONFIG_HOOKS]:
         if is_equal_or_in(event, cobj.data[CONFIG_HOOKS][hook_name]["lifecycle"]):
-            _logger.info("Hook event:%s triggered for hook:%s", event, hook_name)
+            _LOGGER.info("Hook event:%s triggered for hook:%s", event, hook_name)
             run_hook(cobj, [hook_name])
 
 
@@ -53,15 +53,10 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
 
     operation_num = 0
     hook = cobj.data[CONFIG_HOOKS][hook_name]
-    _logger.info("Running hook:%s, Args:%s", hook_name, hook_args)
+    _LOGGER.info("Running hook:%s, Args:%s", hook_name, hook_args)
     if not _evaluate_condition(cobj, hook_name, hook, extra_vars):
-        _logger.debug("Condition for hook %s evaluted to false", hook_name)
+        _LOGGER.debug("Condition for hook %s evaluted to false", hook_name)
         return False
-
-    try:
-        hook = cobj.data[CONFIG_HOOKS][hook_name]
-    except KeyError as error:
-        raise CLIError(f"Unknown hook name '{hook_name}'.\n{str(error)}") from error
 
     for operation in hook["ops"]:
         operation_num += 1
@@ -71,7 +66,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
         elif is_equal_or_in(cobj.platform, operation["platform"]):
             pass  # my platfrom
         else:
-            _logger.info("Skipping due platform. My platform '%s' limiting platform '%s'", cobj.platform, operation["platform"])
+            _LOGGER.info("Skipping due platform. My platform '%s' limiting platform '%s'", cobj.platform, operation["platform"])
             continue  # Skip
 
         op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], extra_vars=extra_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
@@ -96,7 +91,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
 
 
 def _run_print(hook_name, ops_name, op_args):
-    _logger.info("Print %s | %s", hook_name, ops_name)
+    _LOGGER.info("Print %s | %s", hook_name, ops_name)
     print(op_args)
     return op_args, ""
 

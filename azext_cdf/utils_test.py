@@ -4,7 +4,8 @@ import unittest
 import tempfile
 import shutil
 from azext_cdf.utils import file_exists
-# pylint: disable=missing-class-docstring,missing-function-docstring
+
+# pylint: disable=C0111
 class TestFileExits(unittest.TestCase):
     def setUp(self):
         self.dirpath = tempfile.mkdtemp()
