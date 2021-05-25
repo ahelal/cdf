@@ -21,8 +21,17 @@ install: build uninstall
 	az extension add --upgrade -y --source ./dist/$(EXTENTION_NAME)*.whl
 
 test-lint:
-	pylint azext_cdf
+# stop the build if there are Python syntax errors or undefined names
+	@echo "***** Running flake8 syntax  *****"
+	flake8 azext_cdf --count --select=E9,F63,F7,F82 --show-source --statistics
 	
+# exit-zero treats all errors as warnings.
+	@echo "***** Running flake8 warning *****"
+	flake8 azext_cdf --count --exit-zero --max-complexity=10 --max-line-length=200 --statistics --exclude *_test.py
+
+# pylint
+	@echo "***** Running pylint *****"
+	pylint azext_cdf
 test-unit:
 	# python3 -m unittest discover -s . -p '*_test.py' -v
 	pytest -v

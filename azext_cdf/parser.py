@@ -51,12 +51,14 @@ CONFIG_SUPPORTED_OPS_TYPES = ("az", "cmd", "print", "call", "script")
 CONFIG_SUPPORTED_OPS_MODE = ('wait', "interactive")
 CONFIG_DESCRIPTION = "description"
 
+
 def _include_file(name):
     try:
         with open(name) as in_file:
             return in_file.read()
     except Exception as error:
         raise CLIError(f"include_file filter argument '{name}' error. {str(error)}") from error
+
 
 @contextfunction
 def _template_file(ctx, name):
@@ -68,8 +70,10 @@ def _template_file(ctx, name):
         raise CLIError(f"template_file filter argument '{name}' error. {str(error)}") from error
     return data
 
+
 def _list_or_tuple_of(sub_schema):
     return schema.Or((sub_schema,), [sub_schema])
+
 
 class ConfigParser:
     '''  CDF yaml config parser class '''
@@ -146,10 +150,10 @@ class ConfigParser:
         self.data = self._read_config(cdf_yml_filepath)
         self._validate_conf(cdf_yml_filepath)
         self._setup_jinja2()
-        self._setup_pre_phase_interpolation(cdf_yml_filepath) # pre phase
+        self._setup_pre_phase_interpolation(cdf_yml_filepath)  # pre phase
         self._setup_test()
-        self._setup_first_phase_interpolation(override_state, remove_tmp) # First phase
-        self._setup_second_phase_variables() # Second phase
+        self._setup_first_phase_interpolation(override_state, remove_tmp)  # First phase
+        self._setup_second_phase_variables()  # Second phase
         self.update_hooks_result(self.state.result_hooks)
 
     def _validate_conf(self, cdf_yml_filepath):
@@ -204,13 +208,12 @@ class ConfigParser:
     def _setup_test(self):
         if not self.test:
             return
-        self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test_state.json" # override default state file
-        if self.data[CONFIG_TESTS][self.test].get(CONFIG_FILE, False): # load test from another dir
+        self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test_state.json"  # override default state file
+        if self.data[CONFIG_TESTS][self.test].get(CONFIG_FILE, False):  # load test from another dir
             self.data[CONFIG_TESTS][self.test][CONFIG_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TESTS][self.test][CONFIG_FILE], f"test {self.test} key {CONFIG_FILE}")
             test_data = self._read_config(self.data[CONFIG_TESTS][self.test][CONFIG_FILE])
             self.data[CONFIG_TESTS][self.test] = {**self.data[CONFIG_TESTS][self.test], **test_data}
-            self._validate_conf(self.data[CONFIG_TESTS][self.test][CONFIG_FILE]) # revalidate after loading data
-            # print(yaml.dump(self.data))
+            self._validate_conf(self.data[CONFIG_TESTS][self.test][CONFIG_FILE])  # revalidate after loading data
 
         self.data[CONFIG_NAME] = self.data[CONFIG_TESTS][self.test].get(CONFIG_NAME, f"{self.data[CONFIG_NAME]}_{self.test}_test")
         self.data[CONFIG_TESTS][self.test][CONFIG_DESCRIPTION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_DESCRIPTION, f"{self.data[CONFIG_NAME]} {self.test} test")
@@ -239,12 +242,11 @@ class ConfigParser:
             RUNTIME_RUN_ONCE_KEY: RUNTIME_RUN_ONCE,
         }
 
-
     def _setup_first_phase_interpolation(self, override_state=None, remove_tmp=False):
         ''' first phase interpolation '''
 
         self.first_phase_vars[CONFIG_CDF][CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], context=f"key {CONFIG_TMP}")
-        if remove_tmp: # remove and create tmp dir incase we will download some stuff for templates
+        if remove_tmp:  # remove and create tmp dir incase we will download some stuff for templates
             dir_remove(self.tmp_dir)
         dir_create(self.tmp_dir)
         if override_state:
@@ -255,7 +257,7 @@ class ConfigParser:
             full_path_state_file = os.path.join(self.data[CONFIG_STATE_FILEPATH], self.data[CONFIG_STATE_FILENAME])
 
         self.state = State(full_path_state_file)  # initialize state
-        self.jinja_env.globals["store"] = self.state.store_get # setup store functions in jinja2
+        self.jinja_env.globals["store"] = self.state.store_get  # setup store functions in jinja2
 
         self.first_phase_vars[CONFIG_CDF][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
         if CONFIG_VARS in self.data:
@@ -282,7 +284,7 @@ class ConfigParser:
             },
             RUNTIME_HOOKS: self._hooks_ops(),
         }
-        self.second_phase_vars[RUNTIME_RESULT] = self.state.result_up # update results from state
+        self.second_phase_vars[RUNTIME_RESULT] = self.state.result_up  # update results from state
 
     def _interpolate_object(self, phase, template, variables=None):
         if isinstance(template, str):
@@ -306,7 +308,7 @@ class ConfigParser:
 
     def _interpolate_pre_up_element(self, obj):
         if isinstance(obj, (list, set)):
-            for i in range(len(obj)):
+            for i, _ in enumerate(obj):
                 obj[i] = self._interpolate_pre_up_element(obj[i])
         elif isinstance(obj, dict):
             for key in obj:
@@ -328,7 +330,6 @@ class ConfigParser:
                         raise CLIError(f"config schema error duplicate op name '{op_name}'  in hook '{hook_k}")
                     output_hooks[hook_k][op_name] = {}
         return output_hooks
-
 
     def interpolate_delayed_variable(self):
         ''' Interpolate delayed variables that was not caught in earlier phases '''
@@ -396,7 +397,6 @@ class ConfigParser:
         for k in self.data.get(CONFIG_TESTS, {}).get(test_name, {}).get("expect", {}).get("hooks", []):
             hooks.append(list(k.keys())[0])
         return hooks
-
 
     @property
     def name(self):

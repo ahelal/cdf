@@ -8,13 +8,15 @@ from knack.log import get_logger
 from azure.cli.command_modules.resource.custom import run_bicep_command
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
-from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN #  LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
+from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN
+# TODO LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists
 from azext_cdf.utils import Progress, init_config
 from azext_cdf.hooks import run_hook, run_hook_lifecycle
-from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN # STATE_PHASE_TESTED, STATE_PHASE_TESTING,
-from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR #, STATE_STATUS_FAILED
+from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
+# TODO STATE_PHASE_TESTED, STATE_PHASE_TESTING,
+from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR
 from azext_cdf.provisioner import de_provision, provision, check_deployment_error
 from azext_cdf.tester import run_test
 from azext_cdf.parser import ConfigParser
@@ -22,6 +24,7 @@ from azext_cdf.parser import ConfigParser
 _LOGGER = get_logger(__name__)
 
 CONFIG_DEFAULT = ".cdf.yml"
+
 
 # pylint: disable=unused-argument
 def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_args=None, working_dir=None, state_file=None, always_clean_up=False, always_keep=False):
@@ -31,11 +34,11 @@ def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_arg
         raise CLIError("You can only use one of flags 'alway-clean' or 'always-keep'.")
     working_dir = os.path.realpath(working_dir)
     cobj, cwd = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
-    Progress(cmd, pseudo=True) # hacky way to disable default progress animation
+    Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     dir_change_working(cwd)
     if test_args:
         for test in test_args:
-            if not test in cobj.tests:
+            if test not in cobj.tests:
                 raise CLIError(f"unknown test name '{test}', Supported hooks '{cobj.tests}")
     else:
         test_args = cobj.tests
@@ -51,6 +54,7 @@ def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_arg
     if one_test_failed:
         raise CLIError("At-least on test failed")
     return results
+
 
 def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None, state_file=None):
     ''' init handler '''
@@ -159,6 +163,7 @@ def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None,
         # TODO add terraform errors
     return None
 
+
 def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phase=2, state_file=None):
     ''' debug interpolate handler, start an interactive jinja2 interpolation shell like '''
 
@@ -178,10 +183,11 @@ def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phas
         except CLIError as error:
             print(f"Error : {str(error)}")
 
+
 def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None, state_file=None):
     ''' down handler, Destroy a provisioned environment '''
 
-    Progress(cmd, pseudo=True) # hacky way to disable default progress animation
+    Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     cobj, _ = init_config(config, ConfigParser, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
     cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
@@ -197,10 +203,11 @@ def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None,
     cobj.state.completed_phase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
     run_hook_lifecycle(cobj, LIFECYCLE_POST_DOWN)
 
+
 def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None, state_file=None, destroy=False):
     ''' up handler, Provision an environment '''
 
-    Progress(cmd, pseudo=True) # hacky way to disable default progress animation
+    Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     if destroy:
         cwd = os.getcwd()
         down_handler(cmd, config=config, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)

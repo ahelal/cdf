@@ -1,5 +1,6 @@
 """ Command Arguments file """
 
+
 # pylint: disable=C0111
 def load_arguments(self, _):
     with self.argument_context("cdf") as context:

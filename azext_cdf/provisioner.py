@@ -17,6 +17,7 @@ from azext_cdf.utils import json_write_to_file
 
 _LOGGER = get_logger(__name__)
 
+
 def _empty_deployment(cmd, cobj):
     # TODO check deployment exists before doing an empty deployment
     empty_deployment = {
@@ -38,9 +39,11 @@ def _empty_deployment(cmd, cobj):
         else:
             raise CLIError(error) from error
 
+
 def _provision_rg_if_needed(cmd, resource_group, location, manage_resource_group):
     if manage_resource_group:
         create_resource_group(cmd, rg_name=resource_group, location=location)
+
 
 def _resource_group_exists(cmd, resource_group):
     try:
@@ -51,6 +54,7 @@ def _resource_group_exists(cmd, resource_group):
         raise CLIError from error
     else:
         return True
+
 
 def de_provision(cmd, cobj):
     ''' de provision a provisioned service'''
@@ -120,6 +124,7 @@ def provision(cmd, cobj):
         )
     cobj.state.set_result(outputs=outputs, resources=output_resources, flush=True)
 
+
 def run_command(bin_path, args=None, interactive=False, cwd=None):
     """
     Run CLI commands
@@ -147,6 +152,7 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
             context = f"{context}\n{process.stderr.decode('utf-8')}"
         raise CLIError(context) from error
 
+
 def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False, complete_deployment=False):
     '''
     Deploy an bicep files
@@ -170,6 +176,7 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, locatio
         complete_deployment=complete_deployment,
     )
 
+
 def check_deployment_error(cmd, resource_group_name, deployment_name, deployment_type):
     ''' Check arm deployment errors '''
 
@@ -182,6 +189,7 @@ def check_deployment_error(cmd, resource_group_name, deployment_name, deployment
         error = properties.get("error")
         deployment_status.update({"error": error, "name": deployment_name})
     return deployment_status
+
 
 def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, location, params=None, manage_resource_group=True, no_prompt=False, complete_deployment=False):
     """
@@ -207,6 +215,7 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
     )
     return deployment.result().as_dict().get("properties", {}).get("output_resources", {}), deployment.result().as_dict().get("properties", {}).get("outputs", {})
 
+
 def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     ''' Run terraform apply '''
 
@@ -230,7 +239,8 @@ def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_g
         output = json.loads(stdout)
     except subprocess.CalledProcessError as error:
         raise CLIError(f"Error while decoding json from terraform output. Error: {error}") from error
-    return  {}, output
+    return {}, output
+
 
 def run_terraform_destroy(cmd, deployment_name, terraform_dir, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False):
     ''' Run terraform destroy '''
