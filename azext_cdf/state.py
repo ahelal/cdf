@@ -38,6 +38,7 @@ STATE_STORE = "store"
 
 _LOGGER = get_logger(__name__)
 
+
 class State():
     ''' The state class '''
 
@@ -68,7 +69,6 @@ class State():
         }
         self._setup_hooks_reference()
         self.add_event("Created a state file", status=STATE_STATUS_UNKNOWN, flush=True)
-
 
     def setup(self, deployment_name, resource_group, config_hooks):
         ''' Check if resource group is mapping to state else raise an error'''
@@ -107,6 +107,7 @@ class State():
             pass
 
     def _setup_hooks_reference(self):
+        # TODO to complex refactor
         # hooks/ops in state db but not config_db
         current_state_db_hooks = deepcopy(self.state_db[STATE_HOOKS_RESULT])
         for state_hook in current_state_db_hooks:
@@ -114,7 +115,7 @@ class State():
                 for state_op in current_state_db_hooks[state_hook]:
                     if state_op[0] == "_":
                         pass  # ignore _
-                    elif not state_op in self.config_hooks[state_hook]:
+                    elif state_op not in self.config_hooks[state_hook]:
                         self.state_db[STATE_HOOKS_RESULT][state_hook].pop(state_op)
             else:
                 self.state_db[STATE_HOOKS_RESULT].pop(state_hook)  # remove hook outdate
@@ -123,10 +124,10 @@ class State():
         if not self.config_hooks:
             return
         for config_hook in self.config_hooks:
-            if not config_hook in self.state_db[STATE_HOOKS_RESULT]:
+            if config_hook not in self.state_db[STATE_HOOKS_RESULT]:
                 self.state_db[STATE_HOOKS_RESULT][config_hook] = {}
             for config_op in self.config_hooks[config_hook]:
-                if not config_op in self.state_db[STATE_HOOKS_RESULT][config_hook]:
+                if config_op not in self.state_db[STATE_HOOKS_RESULT][config_hook]:
                     self.state_db[STATE_HOOKS_RESULT][config_hook][config_op] = {}
 
     def _read_state(self):
@@ -138,7 +139,7 @@ class State():
             except CLIError as error:
                 raise CLIError(f"Error while reading/decoding state '{self.state_file}' Did you try to change it manually. {str(error)}") from error
             return True
-        if self.state_url: # TODO need to add check if path
+        if self.state_url:  # TODO need to add check if path
             self.state_db = file_http_read_json_content(self.state_url)
         return False
 

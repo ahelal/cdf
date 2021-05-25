@@ -46,6 +46,7 @@ def run_hook(cobj, hook_args):
         cobj.state.add_event(f"Error during hook execution {str(error)}", hook=hook_name, flush=True)
         raise
 
+
 def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     hook_name = hook_args[0]
     if recursion_n > RECURSION_LIMIT:
@@ -125,6 +126,7 @@ def _run_script(hook_name, ops_name, op_args, hook_args, cobj, cwd):
     os.chmod(target_file, stat.S_IRUSR | stat.S_IEXEC | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)  # make file exec
     op_args[0] = target_file
     return _run_cmd(hook_name, ops_name, op_args, hook_args, cwd=cwd)
+
 
 def _evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
     """

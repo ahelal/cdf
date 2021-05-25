@@ -13,24 +13,28 @@ from azext_cdf.hooks import run_hook
 
 _LOGGER = get_logger(__name__)
 
+
 def _run_hook(_, cobj, __, expect_hook):
     hook_name = expect_hook.get("hook")
     hook_args = expect_hook.get("args", [])
     hook_args = [hook_name] + hook_args
     return run_hook(cobj, hook_args)
 
+
 def _run_provision(cmd, cobj, _, __):
     return provision(cmd, cobj)
 
+
 def _run_de_provision(cmd, cobj, _, __):
     return de_provision(cmd, cobj)
+
 
 def _run_expect_tests(_, cobj, test_name, expect_obj):
     errors = []
     expect_cmds = expect_obj.get("cmd")
     if expect_cmds:
         if isinstance(expect_cmds, str):
-            expect_cmds = [expect_cmds] # convert to list
+            expect_cmds = [expect_cmds]  # convert to list
         for expect_cmd in expect_cmds:
             try:
                 _expect_cmd_exec(cobj, test_name, expect_cmd)
@@ -40,7 +44,7 @@ def _run_expect_tests(_, cobj, test_name, expect_obj):
     asserts = expect_obj.get("assert")
     if asserts:
         if isinstance(asserts, str):
-            asserts = [asserts] # convert to list
+            asserts = [asserts]  # convert to list
         for expect_assert in asserts:
             try:
                 _expect_assert_exec(cobj, test_name, expect_assert)
@@ -49,11 +53,13 @@ def _run_expect_tests(_, cobj, test_name, expect_obj):
     if errors:
         raise CLIError(errors)
 
+
 def _expect_cmd_exec(cobj, test_name, expect_cmd):
     cobj.interpolate_delayed_variable()
     expect_cmds_interpolated = cobj.interpolate(phase=2, template=expect_cmd, context=f"test '{test_name}' cmd interpolation '{expect_cmd}'")
     expect_cmds_interpolated = shlex.split(expect_cmds_interpolated)
     return run_command(expect_cmds_interpolated[0], expect_cmds_interpolated[1:], interactive=False)
+
 
 def _expect_assert_exec(cobj, test_name, expect_assert):
     cobj.interpolate_delayed_variable()
@@ -74,7 +80,7 @@ def _expect_assert_exec(cobj, test_name, expect_assert):
 
 def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, results, **kwargs):
     progress_indicator = Progress(cmd, pseudo=False)
-    expect_to_fail = kwargs.get("fail", expect_obj.get("fail", False)) # get expect to fail from params, from expect obj, or defaults to false
+    expect_to_fail = kwargs.get("fail", expect_obj.get("fail", False))  # get expect to fail from params, from expect obj, or defaults to false
     exit_on_first_error = kwargs.get("exit_on_first_error", False)
     always_clean_up = kwargs.get("always_clean_up", False)
     test_name = kwargs.get("test_name")
@@ -85,7 +91,7 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, results, **k
     try:
         func(cmd, test_cobj, test_name, expect_obj)
         if expect_to_fail:
-            results[test_name]["failed"] = True # test failed globably
+            results[test_name]["failed"] = True  # test failed globably
             mismatched_failed_expection = True
             progress_end_msg = f"Test {test_name}: {phase_name} failed"
             results[test_name][phase_name] = {"failed": True, "msg": "expecting to fail and did not fail"}
@@ -102,7 +108,7 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, results, **k
             progress_end_msg = f"Test {test_name}: {phase_name} failed"
             results[test_name][phase_name]["failed"] = True
             results[test_name][phase_name]["msg"] = str(error)
-            results[test_name]["failed"] = True # test failed globably
+            results[test_name]["failed"] = True  # test failed globably
             mismatched_failed_expection = True
     progress_indicator.begin(progress_end_msg)
     if mismatched_failed_expection and always_clean_up and phase_name != "de-provisioning":
@@ -113,11 +119,12 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, results, **k
             _LOGGER.warning("Failed to clean up %s, %s", test_name, error)
         progress_indicator.begin(f"Test {test_name}: cleaning up due to error")
     elif mismatched_failed_expection and always_clean_up and phase_name == "de-provisioning":
-        _LOGGER.warning("Failed to clean up %s, %s", test_name, str(error))
+        _LOGGER.warning("Failed to clean up %s, %s", test_name, str(results[test_name][phase_name]["msg"]))
 
     progress_indicator.end(progress_end_msg)
     if exit_on_first_error and mismatched_failed_expection:
         raise CLIError(f"test '{test_name}' failed with msg '{results[test_name]['msg']}")
+
 
 # pylint: disable=unused-argument
 def run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir, state_file, always_clean_up, always_keep):
@@ -127,19 +134,18 @@ def run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir
     for test_name in test_args:
         results[test_name] = {"failed": False}
         test_cobj = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, test=test_name)[0]
-        #### UP
+        # ** UP **
         expect_obj = test_cobj.get_test(test_name, expect="up")
         _phase_cordinator(cmd, test_cobj, _run_provision, "provisioning", expect_obj, results, test_name=test_name, exit_on_first_error=exit_on_first_error,
                           always_clean_up=always_clean_up, always_keep=always_keep)
         if results[test_name]["failed"]:
             continue
-        #### UP expect
-        # _phase_cordinator(cmd, test_cobj, _run_expect_tests, "provision expect", {**phase_params, **{"fail": False}}, expect_obj, results)
+        # ** UP expect **
         _phase_cordinator(cmd, test_cobj, _run_expect_tests, "provision expect", expect_obj, results, test_name=test_name, exit_on_first_error=exit_on_first_error,
                           always_clean_up=always_clean_up, always_keep=always_keep, fail=False)
         if results[test_name]["failed"]:
             continue
-        #### RUN hook
+        # ** RUN hook **
         for hook in test_cobj.test_hooks(test_name=test_name):
             expect_obj = test_cobj.get_test(test_name, hook=hook)
             expect_obj['hook'] = hook
@@ -147,12 +153,12 @@ def run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir
                               always_clean_up=always_clean_up, always_keep=always_keep)
             if results[test_name]["failed"]:
                 continue
-            #### Hooks expect
+            # ** Hooks expect **
             _phase_cordinator(cmd, test_cobj, _run_expect_tests, f"hook {hook} expect", expect_obj, results, test_name=test_name, exit_on_first_error=exit_on_first_error,
                               always_clean_up=always_clean_up, always_keep=always_keep, fail=False)
             if results[test_name]["failed"]:
                 continue
-        #### DOWN
+        # ** DOWN **
         if always_keep:
             continue
         expect_obj = test_cobj.get_test(test_name, expect="down")
@@ -160,13 +166,11 @@ def run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir
                           always_clean_up=always_clean_up, always_keep=always_keep)
         if results[test_name]["failed"]:
             continue
-        #### DOWN expect
+        # ** DOWN expect **
         _phase_cordinator(cmd, test_cobj, _run_expect_tests, "de-provision expect", expect_obj, results, test_name=test_name, exit_on_first_error=exit_on_first_error,
                           always_clean_up=always_clean_up, always_keep=always_keep, fail=False)
         if results[test_name]["failed"]:
             continue
-
     # 6. write tests to state
-
     # TODO write tests to state
     return results

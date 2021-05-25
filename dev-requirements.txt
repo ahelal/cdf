@@ -7,3 +7,4 @@ semver
 pyaml
 mock
 coverage
+flake8

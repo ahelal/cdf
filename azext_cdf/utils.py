@@ -18,6 +18,7 @@ import azure.cli.core.commands.progress as progress
 
 _LOGGER = get_logger(__name__)
 
+
 # pylint: disable=no-self-use
 class Progress():
     ''' Progress message'''
@@ -29,29 +30,35 @@ class Progress():
             return
         self.controller = progress.ProgressHook()
         self.controller.init_progress(progress.get_progress_view())
+
     def init_progress(self, _):
         ''' NoOps '''
         return
+
     def begin(self, msg=None):
         ''' begin message '''
         if self.pseudo:
             return
         self.controller.begin(message=msg)
         self.controller.update()
+
     def end(self, msg=None):
         ''' end message '''
         if self.pseudo:
             return
         self.controller.end(message=msg)
         self.stop()
+
     def stop(self):
         ''' stop progress '''
         if self.pseudo:
             return
         self.controller.stop()
+
     def update_progress(self):
         ''' NoOps '''
         return
+
 
 # TODO should be refactored into parser code
 def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None, test=None):
@@ -60,6 +67,7 @@ def init_config(config, config_parser, remove_tmp=False, working_dir=None, state
     if working_dir:
         dir_change_working(working_dir)
     return config_parser(config, remove_tmp, state_file, test=test), cwd
+
 
 def real_dirname(dir_path):
     ''' return real dir name '''
@@ -120,6 +128,7 @@ def file_exists(filepath):
         return False
     return True
 
+
 def file_read_content(filepath):
     ''' Return content of file '''
 
@@ -129,6 +138,7 @@ def file_read_content(filepath):
     except OSError as error:
         raise CLIError(f"Failed to read file '{filepath}'. Error: {str(error)}") from error
 
+
 def file_http_read_json_content(urlpath):
     ''' get http content'''
     try:
@@ -137,6 +147,7 @@ def file_http_read_json_content(urlpath):
     except Exception as error:
         raise CLIError(f"Failed to read file '{urlpath}'. Error: {str(error)}") from error
 
+
 def file_write_content(filepath, content):
     ''' write content to a file '''
     try:
@@ -144,6 +155,7 @@ def file_write_content(filepath, content):
             file_in.write(content)
     except OSError as error:
         raise CLIError(f"Failed to write file '{filepath}'. Error: {str(error)}") from error
+
 
 def file_http_write_json_content(filepath, content):
     ''' write content do dapr endpoint'''
@@ -229,6 +241,7 @@ def find_the_right_dir(config_up_dir, config_dir):
         return config_up_dir
     return config_dir
 
+
 def find_the_right_file(config_up_location, provisioner_name, file_extension, config_dir):
     ''' find a bicep or arm json file in a dir'''
     # TODO need to test this function
@@ -246,6 +259,7 @@ def find_the_right_file(config_up_location, provisioner_name, file_extension, co
     if not up_location:
         raise CLIError(f"Can't find {file_extension} file. Please configure 'up' option.")
     return up_location
+
 
 def random_string(length, option=None):
     ''' Create a random string of a given length '''

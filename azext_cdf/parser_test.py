@@ -48,7 +48,7 @@ class SimpleParser(BasicParser):
         self.assertEqual(parser.up_location, '')
         self.assertEqual(parser.provisioner, 'bicep')
         self.assertEqual(parser.deployment_mode, False)
-        self.assertEqual(parser.config_dir, os.getcwd()) # abs path
+        self.assertEqual(parser.config_dir, os.getcwd())  # abs path
         self.assertEqual(parser.tests, [])
         self.assertEqual(parser.hook_names, [])
         self.assertEqual(list(parser.hooks_dict), [])
@@ -77,7 +77,7 @@ class PathsParser(BasicParser):
         mock_read_config.return_value = self.config
         parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
         self.assertEqual(parser.name, self.config["name"])
-        self.assertEqual(parser.config_dir, f"{os.getcwd()}/path_a/path_b") # relative path
+        self.assertEqual(parser.config_dir, f"{os.getcwd()}/path_a/path_b")  # relative path
         self.assertTrue(os.path.exists(self.state_file))
 
     @patch.object(ConfigParser, '_read_config')
@@ -86,7 +86,7 @@ class PathsParser(BasicParser):
         mock_read_config.return_value = self.config
         parser = ConfigParser("/path_a/path_b/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
         self.assertEqual(parser.name, self.config["name"])
-        self.assertEqual(parser.config_dir, "/path_a/path_b") # abs path
+        self.assertEqual(parser.config_dir, "/path_a/path_b")  # abs path
         self.assertTrue(os.path.exists(self.state_file))
 
 class InterpolateParser(BasicParser):
