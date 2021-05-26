@@ -51,6 +51,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r dev-requirements.txt
       - name: install AZ & bicep
         run: |
           echo "install azure-cli"
@@ -65,7 +66,7 @@ jobs:
           az cdf debug version
       - name: Log in
         run: |
-          az login --service-principal --username ${{ secrets.APP_ID }} --password ${{ secrets.APP_PASSWORD }} --tenant ${{ secrets.APP_TENANT_ID }}
+          az login --service-principal --username ${{ secrets.APP_ID }} --password ${{ secrets.APP_PASSWORD }} --tenant ${{ secrets.APP_TENANT_ID }} -o none
       - name: integration testing
         run: |
           make test-integration
