@@ -53,8 +53,11 @@ jobs:
           python -m pip install --upgrade pip
       - name: install AZ & CDF plugin
         run: |
+          echo "install azure-cli"
           pip install azure-cli==${{matrix.az-cli-version}}
           az --version
+          echo "install CDF"
+          pip install wheel
           make install
           az cdf --version
       # - name: integration testing
