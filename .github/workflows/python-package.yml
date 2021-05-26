@@ -59,7 +59,10 @@ jobs:
       - name: install CDF
         run: |
           pip install wheel
+          make build
           make install
+          ls -l 
+          ls -l ./dist/*
           az cdf --version
       # - name: integration testing
       #   run: |
