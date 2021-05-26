@@ -61,9 +61,7 @@ jobs:
           pip install wheel
           make build
           make install
-          ls -l 
-          ls -l ./dist/*
-          az cdf --version
+          az cdf debug version
       # - name: integration testing
       #   run: |
       #     make test-unit
