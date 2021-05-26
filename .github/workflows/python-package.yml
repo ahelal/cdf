@@ -51,12 +51,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-      - name: install AZ & CDF plugin
+      - name: install AZ
         run: |
           echo "install azure-cli"
           pip install azure-cli==${{matrix.az-cli-version}}
           az --version
-          echo "install CDF"
+      - name: install CDF
+        run: |
           pip install wheel
           make install
           az cdf --version
