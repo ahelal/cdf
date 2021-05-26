@@ -13,7 +13,7 @@ from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists
 from azext_cdf.utils import Progress, init_config
 from azext_cdf.hooks import run_hook
-from azext_cdf.state import STATE_PHASE_UP, STATE_PHASE_GOING_DOWN
+from azext_cdf.state import STATE_PHASE_UP
 # TODO STATE_PHASE_TESTED, STATE_PHASE_TESTING,
 from azext_cdf.state import STATE_STATUS_SUCCESS
 from azext_cdf.provisioner import de_provision, provision, check_deployment_error
