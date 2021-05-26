@@ -302,9 +302,9 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
         process.check_returncode()
         return stdout, stderr
     except subprocess.CalledProcessError as error:
-        context = f"Run command error. {str(error)}\nstdout: {stdout}\nstderr: {stderr}"
+        context = f"Run command error. {str(error)}"
         if stdout:
-            context = f"{context}\nstdout:{stdout}"
+            context = f"{context} stdout:{stdout}"
         if stderr:
-            context = f"{context}\nstdout:{stderr}"
+            context = f"{context} stdout:{stderr}"
         raise CLIError(context) from error

@@ -41,10 +41,10 @@ test-lint:
 
 test-unit:
 	# python3 -m unittest discover -s azext_cdf -p '*_test.py' -v
-	pytest -v azext_cdf
+	pytest -v azext_cdf --color=yes --code-highlight=yes
 
 test-integration:
-	pytest -v tests
+	pytest -v tests --color=yes --code-highlight=yes
 
 clean:
 	rm -rf build

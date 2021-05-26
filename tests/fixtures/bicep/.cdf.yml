@@ -111,7 +111,7 @@ hooks:
       - type: print
         args: "{{ result['outputs'] }}}}"
   cmd:
-    description: "cmd"
+    description: "Run commands"
     ops:
       - name: A
         type: cmd
@@ -124,6 +124,11 @@ hooks:
         args: print
       - type: print
         args: "A={{ hooks.cmd.A.stdout }}\nB={{ hooks.cmd.B.stderr }}\nC={{ hooks.cmd.C.stdout }}"
+  fail:
+    description: "Fail"
+    ops:
+      - type: cmd
+        args: exit 1
 
 #### to do tests
 tests:
