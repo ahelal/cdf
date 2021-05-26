@@ -6,7 +6,7 @@ EXTENTION_NAME := cdf
 # all: source-venv
 
 source-venv: $(VENV)/bin/activate
-test: test-lint test-unit
+test: test-lint test-unit test-integration
 venv:
 	python3 -m venv $(VENV)
 	pip3 install -r dev-requirements.txt
@@ -19,6 +19,12 @@ uninstall:
 
 install: build uninstall
 	az extension add --upgrade -y --source ./dist/$(EXTENTION_NAME)*.whl
+
+docker-build:
+	@echo "VERSION: $$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)"
+	docker build -t cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs) .
+docker-run:
+	docker run -v $$(pwd):/cdf -it cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)
 
 test-lint:
 # stop the build if there are Python syntax errors or undefined names

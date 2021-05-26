@@ -5,6 +5,5 @@ pylint
 wheel
 semver
 pyaml
-mock
 coverage
 flake8
