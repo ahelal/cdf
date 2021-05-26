@@ -36,6 +36,7 @@ jobs:
           make test-unit
   integration:
     runs-on: ubuntu-latest
+    needs: simple
     strategy:
       fail-fast: false
       matrix:
@@ -52,8 +53,8 @@ jobs:
           python -m pip install --upgrade pip
       - name: install AZ & CDF plugin
         run: |
-          pip install azure-cli==2.2.0
-          curl -L https://aka.ms/Instcurl -L https://aka.ms/InstallAzureCli allAzureCli | bash
+          pip install azure-cli==${{az-cli-version}}
+          az --version
           make install
           az cdf --version
       # - name: integration testing
