@@ -51,10 +51,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-      - name: install AZ
+      - name: install AZ & bicep
         run: |
           echo "install azure-cli"
           pip install azure-cli==${{matrix.az-cli-version}}
+          az bicep install
           az --version
       - name: install CDF
         run: |
