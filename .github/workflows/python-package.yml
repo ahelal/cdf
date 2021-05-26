@@ -63,6 +63,9 @@ jobs:
           make build
           make install
           az cdf debug version
-      # - name: integration testing
-      #   run: |
-      #     make test-unit
+      - name: Log in
+        run: |
+          az login --service-principal --username ${{ secrets.APP_ID }} --password ${{ secrets.APP_PASSWORD }} --tenant ${{ secrets.APP_TENANT_ID }}
+      - name: integration testing
+        run: |
+          make test-integration

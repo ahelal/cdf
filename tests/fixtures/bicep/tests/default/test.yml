@@ -1,0 +1,31 @@
+description: "Default "
+params:
+  tags: "{{ vars.tags }}"
+
+vars:
+  extra: overwritten
+  match_name: "{{ cdf.name}}_key"
+  log_file: "{{cdf.tmp_dir}}/{{cdf.name}}.txt"
+  tags:
+    env: "tests"
+
+expect:
+  up:
+    fail: false
+    assert:
+      - "{{ result.outputs.helloword.value == 'Hello' }}"
+      - "{{ result.outputs.name.value == vars.match_name }}"
+      - "{{ result.outputs.extra.value == 'overwritten' }}"
+      - "{{ result.outputs.tags.value == vars.tags }}"
+      - "{{ result.resources | length == 1 }}"
+  down:
+    fail: false
+  # hooks:
+  #   - recursion:
+  #       fail: false
+  #       cmd: "touch /tmp/recursion"
+  #       # assert: ""
+  #   - pre-up:
+  #       fail: false
+  #       cmd: "touc /tmp/pre-up"
+  #       # assert: ""

@@ -135,7 +135,7 @@ def debug_state_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file
 def debug_result_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug result handler, return results after up'''
 
-    cobj, _ = init_config(config, False, working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     return cobj.state.result_up
 
 
@@ -188,7 +188,6 @@ def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None,
 
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     cobj, _ = init_config(config, ConfigParser, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
-    cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
     de_provision(cmd, cobj)
 
 

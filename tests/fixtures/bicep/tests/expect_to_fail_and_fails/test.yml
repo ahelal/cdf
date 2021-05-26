@@ -1,0 +1,6 @@
+description: "Expect the test to fail and tests fails"
+params:
+  location: "eastus22" # invalid location
+expect:
+  up:
+    fail: true

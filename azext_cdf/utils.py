@@ -286,6 +286,7 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
     Returns: stdout, stderr  strings
     Exceptions: raise CLIError on execution error
     """
+
     process = None
     stdout = None
     stderr = None
@@ -295,14 +296,15 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
         if interactive:
             subprocess.check_call(cmd_args, cwd=cwd)
             return "", ""
-
         process = subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=False)
+        stdout = process.stdout.decode('utf-8')
+        stderr = process.stderr.decode('utf-8')
         process.check_returncode()
-        return process.stdout.decode("utf-8"), process.stderr.decode("utf-8")
-    except (subprocess.CalledProcessError, FileNotFoundError) as error:
+        return stdout, stderr
+    except subprocess.CalledProcessError as error:
         context = f"Run command error. {str(error)}\nstdout: {stdout}\nstderr: {stderr}"
-        if process:
-            stdout = process.stdout.decode('utf-8')
-            stderr = process.stderr.decode('utf-8')
-            context = f"{context}\n{process.stderr.decode('utf-8')}"
+        if stdout:
+            context = f"{context}\nstdout:{stdout}"
+        if stderr:
+            context = f"{context}\nstdout:{stderr}"
         raise CLIError(context) from error

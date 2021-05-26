@@ -10,7 +10,7 @@ from azext_cdf.version import VERSION
 
 STATE_PHASE_UNKNOWN = "unknown"
 STATE_PHASE_GOING_UP = "transitioning_up"
-STATE_PHASE_UP = "UP"
+STATE_PHASE_UP = "up"
 STATE_PHASE_TESTED = "tested"
 STATE_PHASE_TESTING = "testing"
 STATE_PHASE_DOWN = "down"

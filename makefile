@@ -34,8 +34,11 @@ test-lint:
 	pylint azext_cdf
 
 test-unit:
-	# python3 -m unittest discover -s . -p '*_test.py' -v
-	pytest -v
+	# python3 -m unittest discover -s azext_cdf -p '*_test.py' -v
+	pytest -v azext_cdf
+
+test-integration:
+	pytest -v tests
 
 clean:
 	rm -rf build
