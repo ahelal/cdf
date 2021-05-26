@@ -124,7 +124,7 @@ class InterpolateParser(BasicParser):
         self.assertEqual(parser.interpolate(1, "{{vars.d}}"), "False")
         self.assertEqual(parser.interpolate(1, "{{vars.e[0]}}"), "1")
         self.assertEqual(parser.interpolate(1, "{{vars.f}}"), self.config["name"])
-        self.assertEqual(parser.interpolate(1, "{{vars.a}}{{vars.z}}", extra_vars={"z": 23}), "123")
+        self.assertEqual(parser.interpolate(1, "{{vars.a}}{{a}}{{vars.z}}{{z}}{{cdf.name}}", extra_vars={"z": 9}, root_vars={"a": "A", "z":"Z", "cdf": "ignored"}), f"1A9Z{self.config['name']}")
         # variable not accessible in stage one
         with self.assertRaises(CLIError) as context:
             parser.interpolate(1, "{{result}}")

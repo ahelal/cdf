@@ -43,7 +43,7 @@ setup(
     description='CDF tools',
     author='Adham Abdelwahab',
     author_email='',
-    url='',
+    url='https://github.com/ahelal/cdf',
     long_description='CDF is an Azure CLI plugin that will make your life easier to develop, test, maintain, share units, and run IaC code in Azure',
     license='MIT',
     classifiers=CLASSIFIERS,

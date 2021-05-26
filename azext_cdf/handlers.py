@@ -8,15 +8,14 @@ from knack.log import get_logger
 from azure.cli.command_modules.resource.custom import run_bicep_command
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
-from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN
 # TODO LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists
 from azext_cdf.utils import Progress, init_config
-from azext_cdf.hooks import run_hook, run_hook_lifecycle
-from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
+from azext_cdf.hooks import run_hook
+from azext_cdf.state import STATE_PHASE_UP, STATE_PHASE_GOING_DOWN
 # TODO STATE_PHASE_TESTED, STATE_PHASE_TESTING,
-from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR
+from azext_cdf.state import STATE_STATUS_SUCCESS
 from azext_cdf.provisioner import de_provision, provision, check_deployment_error
 from azext_cdf.tester import run_test
 from azext_cdf.parser import ConfigParser
@@ -190,18 +189,7 @@ def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None,
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     cobj, _ = init_config(config, ConfigParser, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
     cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
-    run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
-    try:
-        de_provision(cmd, cobj)
-    except CLIError as error:
-        cobj.state.add_event(f"Errored during down phase: {str(error)}", STATE_STATUS_ERROR)
-        raise CLIError(error) from error
-    except Exception as error:
-        cobj.state.add_event(f"General error during down phase: {str(error)}", STATE_STATUS_ERROR)
-        raise
-
-    cobj.state.completed_phase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
-    run_hook_lifecycle(cobj, LIFECYCLE_POST_DOWN)
+    de_provision(cmd, cobj)
 
 
 def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None, state_file=None, destroy=False):
@@ -214,17 +202,4 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
         dir_change_working(cwd)
 
     cobj, _ = init_config(config, ConfigParser, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
-    cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
-    # Run pre up life cycle
-    run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
-    # p = Progress()
-    try:
-        provision(cmd, cobj)
-    except CLIError as error:
-        cobj.state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
-        raise
-    except Exception as error:
-        cobj.state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
-        raise
-    cobj.state.completed_phase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
-    run_hook_lifecycle(cobj, LIFECYCLE_POST_UP)
+    provision(cmd, cobj)

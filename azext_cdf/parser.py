@@ -7,7 +7,7 @@ import schema
 from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 
 from knack.util import CLIError
-from jinja2 import Environment, BaseLoader, StrictUndefined, contextfunction, Template
+from jinja2 import Environment, BaseLoader, StrictUndefined, pass_context, Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError
 from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname, random_string
@@ -60,7 +60,7 @@ def _include_file(name):
         raise CLIError(f"include_file filter argument '{name}' error. {str(error)}") from error
 
 
-@contextfunction
+@pass_context
 def _template_file(ctx, name):
     try:
         data = _include_file(name)
@@ -342,9 +342,9 @@ class ConfigParser:
 
         self.interpolate_delayed_variable()
         if CONFIG_PARAMS in self.data:
-            self._interpolate_pre_up_element(self.data)
+            self._interpolate_pre_up_element(self.data[CONFIG_PARAMS])
 
-    def interpolate(self, phase, template, context=None, extra_vars=None, raw_undefined_error=False):
+    def interpolate(self, phase, template, context=None, extra_vars=None, root_vars=None, raw_undefined_error=False):
         ''' Interpolate a string template '''
 
         if template is None:
@@ -356,7 +356,8 @@ class ConfigParser:
 
         if extra_vars:
             variables[CONFIG_VARS] = {**variables[CONFIG_VARS], **extra_vars}
-
+        if root_vars:
+            variables = {**root_vars, **variables}
         if context:
             error_context = f"in phase: '{phase}'', Context: '{context}'"
         else:

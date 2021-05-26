@@ -97,13 +97,14 @@ class State():
 
     def _version_compare(self):
         ''' Check if state version '''
-        state_version = self.state_db["version"]
-        version_compare = semver.compare(state_version, VERSION)
-        if version_compare == -1:  # state is less then cli
+        state_version = semver.parse_version_info(self.state_db["version"])
+        cli_version = semver.parse_version_info(VERSION)
+
+        if state_version < cli_version:  # state is less then cli
             _LOGGER.warning("Your state file is out date: state version %s CDF version %s. Run `up -r` to rewrite state", state_version, VERSION)
-        elif version_compare == 1:  # state is more then cli
+        elif state_version > cli_version:  # state is more then cli
             _LOGGER.warning("Your CDF extension is outdate: state version %s CLI version %s. Upgrade extension", state_version, VERSION)
-        elif version_compare == 0:  # state is less then cli
+        elif state_version == cli_version:  # state is same as cli
             pass
 
     def _setup_hooks_reference(self):

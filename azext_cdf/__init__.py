@@ -9,6 +9,7 @@ from azext_cdf._formater import hooks_output_format
 import azext_cdf._help  # noqa: F401
 from ._params import load_arguments as load_args
 
+
 # pylint: disable=R1725
 class BicepHelperCommandLoad(AzCommandsLoader):
     """ Main class that glues all CDF commands and arguments """

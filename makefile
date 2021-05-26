@@ -6,7 +6,7 @@ EXTENTION_NAME := cdf
 # all: source-venv
 
 source-venv: $(VENV)/bin/activate
-
+test: test-lint test-unit
 venv:
 	python3 -m venv $(VENV)
 	pip3 install -r dev-requirements.txt
@@ -32,6 +32,7 @@ test-lint:
 # pylint
 	@echo "***** Running pylint *****"
 	pylint azext_cdf
+
 test-unit:
 	# python3 -m unittest discover -s . -p '*_test.py' -v
 	pytest -v

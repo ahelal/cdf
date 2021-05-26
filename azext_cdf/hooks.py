@@ -6,9 +6,8 @@ import shlex
 
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import is_equal_or_in, file_read_content, file_write_content
+from azext_cdf.utils import is_equal_or_in, file_read_content, file_write_content, run_command
 from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE, RUNTIME_RUN_ONCE
-from azext_cdf.provisioner import run_command
 
 _LOGGER = get_logger(__name__)
 
@@ -33,11 +32,11 @@ def run_hook(cobj, hook_args):
     """
 
     cobj.interpolate_delayed_variable()
-    extra_vars = {"args": hook_args}
+    root_vars = {"args": hook_args}
     hook_name = hook_args[0]
     cobj.state.add_event(f"Running hook. hook args '{hook_args[1:]}'", hook=hook_name, flush=True)
     try:
-        if not _run_hook(cobj, hook_args, extra_vars=extra_vars):
+        if not _run_hook(cobj, hook_args, root_vars=root_vars):
             cobj.state.add_event("Skipping running hook, condition evaluted to false", hook=hook_name, flush=True)
             return
         cobj.state.add_event("Finished running hook", hook=hook_name, flush=True)
@@ -47,7 +46,7 @@ def run_hook(cobj, hook_args):
         raise
 
 
-def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
+def _run_hook(cobj, hook_args, recursion_n=1, root_vars=None):
     hook_name = hook_args[0]
     if recursion_n > RECURSION_LIMIT:
         raise CLIError(f"Call recursion limit reached {recursion_n - 1} hook: {hook_name}")
@@ -55,7 +54,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     operation_num = 0
     hook = cobj.data[CONFIG_HOOKS][hook_name]
     _LOGGER.info("Running hook:%s, Args:%s", hook_name, hook_args)
-    if not _evaluate_condition(cobj, hook_name, hook, extra_vars):
+    if not _evaluate_condition(cobj, hook_name, hook, root_vars):
         _LOGGER.debug("Condition for hook %s evaluted to false", hook_name)
         return False
 
@@ -70,8 +69,8 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
             _LOGGER.info("Skipping due platform. My platform '%s' limiting platform '%s'", cobj.platform, operation["platform"])
             continue  # Skip
 
-        op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], extra_vars=extra_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
-        op_cwd = cobj.interpolate(phase=SECOND_PHASE, template=operation.get("cwd", None), extra_vars=extra_vars, context=f"az-cli cwd interpolation '{ops_name}' in hook '{hook_name}'")
+        op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], root_vars=root_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
+        op_cwd = cobj.interpolate(phase=SECOND_PHASE, template=operation.get("cwd", None), root_vars=root_vars, context=f"az-cli cwd interpolation '{ops_name}' in hook '{hook_name}'")
         interactive = operation.get("mode") == "interactive"
         if operation["type"] == "az":
             stdout, stderr = _run_az(hook_name, ops_name, op_args, cwd=op_cwd)
@@ -82,7 +81,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
         elif operation["type"] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args)
         elif operation["type"] == "call":
-            _run_hook(cobj, [op_args], recursion_n + 1, extra_vars=extra_vars)
+            _run_hook(cobj, [op_args], recursion_n + 1, root_vars=root_vars)
             stdout, stderr = "", ""
 
         if operation.get("name", False):
@@ -128,7 +127,7 @@ def _run_script(hook_name, ops_name, op_args, hook_args, cobj, cwd):
     return _run_cmd(hook_name, ops_name, op_args, hook_args, cwd=cwd)
 
 
-def _evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
+def _evaluate_condition(cobj, hook_name, hook_object, root_vars=None):
     """
     Evalute a jinja2 expression and returns a boolean
 
@@ -136,12 +135,12 @@ def _evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
         cobj: Config object.
         hook_name: string hook name
         hook_object: The hook object being evaluated.
-        extra_vars: An optional dictionary of variables.
+        root_vars: An optional dictionary of variables.
 
     Returns:
         boolean if condition was evaluated correctly.
     """
-    run_if = cobj.interpolate(phase=SECOND_PHASE, template=hook_object["run_if"], extra_vars=extra_vars, context=f"condition evaluation for hook '{hook_name}'")
+    run_if = cobj.interpolate(phase=SECOND_PHASE, template=hook_object["run_if"], root_vars=root_vars, context=f"condition evaluation for hook '{hook_name}'")
     run_if = run_if.strip()
     if run_if.lower() in ["true", "1", "t", "y", "yes"]:
         return True

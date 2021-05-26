@@ -1,6 +1,5 @@
 """ Provisioner file """
 
-import subprocess
 import json
 import os
 from knack.util import CLIError
@@ -10,10 +9,12 @@ from azure.cli.command_modules.resource.custom import build_bicep_file
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, delete_resource, show_resource
 from azure.cli.core.commands.client_factory import get_subscription_id
 from msrestazure.azure_exceptions import CloudError
-
-from azext_cdf.utils import find_the_right_file, find_the_right_dir
-from azext_cdf.parser import CONFIG_PARAMS
-from azext_cdf.utils import json_write_to_file
+from azext_cdf.parser import CONFIG_PARAMS, LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN
+from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
+from azext_cdf.hooks import run_hook_lifecycle
+from azext_cdf.utils import run_command, find_the_right_file, find_the_right_dir, json_write_to_file
+# TODO STATE_PHASE_TESTED, STATE_PHASE_TESTING,
+from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR
 
 _LOGGER = get_logger(__name__)
 
@@ -57,7 +58,24 @@ def _resource_group_exists(cmd, resource_group):
 
 
 def de_provision(cmd, cobj):
-    ''' de provision a provisioned service'''
+    ''' main de-provision with lifecycle '''
+    cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
+    run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
+    try:
+        _de_provision(cmd, cobj)
+    except CLIError as error:
+        cobj.state.add_event(f"Errored during down phase: {str(error)}", STATE_STATUS_ERROR)
+        raise CLIError(error) from error
+    except Exception as error:
+        cobj.state.add_event(f"General error during down phase: {str(error)}", STATE_STATUS_ERROR)
+        raise
+
+    cobj.state.completed_phase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
+    run_hook_lifecycle(cobj, LIFECYCLE_POST_DOWN)
+
+
+def _de_provision(cmd, cobj):
+    ''' de-provision'''
 
     if cobj.provisioner == "bicep" or cobj.provisioner == "arm":
         _empty_deployment(cmd, cobj)
@@ -80,7 +98,25 @@ def de_provision(cmd, cobj):
 
 
 def provision(cmd, cobj):
-    ''' main provision function '''
+    ''' main provision function that handles lifecycle '''
+
+    cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
+    # Run pre up life cycle
+    run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
+    try:
+        _provision(cmd, cobj)
+    except CLIError as error:
+        cobj.state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
+        raise
+    except Exception as error:
+        cobj.state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
+        raise
+    cobj.state.completed_phase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
+    run_hook_lifecycle(cobj, LIFECYCLE_POST_UP)
+
+
+def _provision(cmd, cobj):
+    ''' run the IaC logic for all provisioners '''
 
     output_resources, outputs = None, None
     # Run template interpolate
@@ -123,34 +159,6 @@ def provision(cmd, cobj):
             no_prompt=False
         )
     cobj.state.set_result(outputs=outputs, resources=output_resources, flush=True)
-
-
-def run_command(bin_path, args=None, interactive=False, cwd=None):
-    """
-    Run CLI commands
-    Returns: stdout, stderr  strings
-    Exceptions: raise CLIError on execution error
-    """
-    process = None
-    stdout = None
-    stderr = None
-    try:
-        cmd_args = [rf"{bin_path}"] + args
-        _LOGGER.debug(" Running a command %s", cmd_args)
-        if interactive:
-            subprocess.check_call(cmd_args, cwd=cwd)
-            return "", ""
-
-        process = subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=False)
-        process.check_returncode()
-        return process.stdout.decode("utf-8"), process.stderr.decode("utf-8")
-    except (subprocess.CalledProcessError, FileNotFoundError) as error:
-        context = f"Run command error. {str(error)}\nstdout: {stdout}\nstderr: {stderr}"
-        if process:
-            stdout = process.stdout.decode('utf-8')
-            stderr = process.stderr.decode('utf-8')
-            context = f"{context}\n{process.stderr.decode('utf-8')}"
-        raise CLIError(context) from error
 
 
 def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, location, params=None, manage_resource_group=True, no_prompt=False, complete_deployment=False):
@@ -237,7 +245,8 @@ def run_terraform_apply(cmd, deployment_name, terraform_dir, tmp_dir, resource_g
     stdout, _ = run_command("terraform", args=["output", "-json"], interactive=False, cwd=terraform_dir)
     try:
         output = json.loads(stdout)
-    except subprocess.CalledProcessError as error:
+    # except subprocess.CalledProcessError as error:
+    except json.JSONDecodeError as error:
         raise CLIError(f"Error while decoding json from terraform output. Error: {error}") from error
     return {}, output
 

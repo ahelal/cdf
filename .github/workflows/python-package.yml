@@ -10,13 +10,14 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  simple:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: [3.7, 3.8, 3.9]
-
+        # az-cli-version: [2.24.0, 2.23.0, 2.22.1]
+        az-cli-version: [2.24.0]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -30,6 +31,31 @@ jobs:
       - name: Lint
         run: |
           make test-lint
-      - name: Test with pytest
+      - name: unit testing
         run: |
           make test-unit
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.7, 3.8, 3.9]
+        az-cli-version: [2.24.0]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+      - name: install AZ & CDF plugin
+        run: |
+          pip install azure-cli==2.2.0
+          curl -L https://aka.ms/Instcurl -L https://aka.ms/InstallAzureCli allAzureCli | bash
+          make install
+          az cdf --version
+      # - name: integration testing
+      #   run: |
+      #     make test-unit

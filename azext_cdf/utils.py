@@ -8,8 +8,8 @@ from json import JSONDecodeError
 import random
 import string
 import shutil
+import subprocess
 import requests
-
 import yaml
 from knack.log import get_logger
 from knack.util import CLIError
@@ -278,3 +278,31 @@ def random_string(length, option=None):
     if not letters:
         raise CLIError("random_string function requires option supported(all, upper, lower and special)")
     return ''.join(random.choice(letters) for i in range(length))
+
+
+def run_command(bin_path, args=None, interactive=False, cwd=None):
+    """
+    Run CLI commands
+    Returns: stdout, stderr  strings
+    Exceptions: raise CLIError on execution error
+    """
+    process = None
+    stdout = None
+    stderr = None
+    try:
+        cmd_args = [rf"{bin_path}"] + args
+        _LOGGER.debug(" Running a command %s", cmd_args)
+        if interactive:
+            subprocess.check_call(cmd_args, cwd=cwd)
+            return "", ""
+
+        process = subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=False)
+        process.check_returncode()
+        return process.stdout.decode("utf-8"), process.stderr.decode("utf-8")
+    except (subprocess.CalledProcessError, FileNotFoundError) as error:
+        context = f"Run command error. {str(error)}\nstdout: {stdout}\nstderr: {stderr}"
+        if process:
+            stdout = process.stdout.decode('utf-8')
+            stderr = process.stderr.decode('utf-8')
+            context = f"{context}\n{process.stderr.decode('utf-8')}"
+        raise CLIError(context) from error
