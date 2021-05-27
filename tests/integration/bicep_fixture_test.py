@@ -80,10 +80,34 @@ class FixtureBicep(unittest.TestCase):
         json_stdout = json.loads(stdout)
         self.assertEqual(json_stdout["id"].lower(), self.__class__.resource_id.lower())
 
-# script check stdout and stderr
-# print_result
-# cmd
-# fail
+    def test_2_cdf_hook_1_script(self):
+        stdout, stderr = run_command("az", ["cdf", "hook", "script", "-w", self.work_dir])
+        self.hook_log = f"{os.getcwd()}/tests/fixtures/bicep/.cdf_tmp/script.txt"
+        with open(self.hook_log, 'r') as file:
+            data = file.read().replace('\n', '')
+        self.assertEqual(data, "eastus2")
+        self.assertIn("X_STDOUT", stdout)
+        self.assertIn("X_STDERR", stdout)
+        self.assertIn("", stderr)
+
+    def test_2_cdf_hook_2_print_result(self):
+        stdout, stderr = run_command("az", ["cdf", "hook", "print_result", "-w", self.work_dir])
+        self.assertEqual(stderr, "")
+        self.assertIn(self.__class__.resource_id.lower(), stdout.lower())
+
+    def test_2_cdf_hook_3_cmd(self):
+        stdout, stderr = run_command("az", ["cdf", "hook", "cmd", "-w", self.work_dir])
+        self.assertEqual(stderr, "")
+        self.assertEqual("printA=stdoutB=stderrC=print", stdout.replace('\n', ''))
+
+    stdout, stderr = "", ""
+    def test_2_cdf_hook_4_fail(self):
+        stdout, stderr = "", ""
+        with self.assertRaises(ValueError) as context:
+            stdout, stderr = run_command("az", ["cdf", "hook", "fail", "-w", self.work_dir])
+        self.assertEqual(stderr, "")
+        self.assertEqual("", stdout.replace('\n', ''))
+        self.assertIn("non-zero", str(context.exception))
 
     def test_3_cdf_down_0(self):
         stdout, stderr = run_command("az", ["cdf", "down", "-w", self.work_dir,  "--yes"])

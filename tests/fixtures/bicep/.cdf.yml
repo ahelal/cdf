@@ -95,12 +95,17 @@ hooks:
     ops:
       - type: print
         args: Running script {{cdf.config_dir}}/script.sh and saving data to {{cdf.tmp_dir}}/script.txt
-      - type: script
+      - name: script_nix
+        type: script
         args:
           - "{{cdf.config_dir}}/script.sh"
           - "{{cdf.tmp_dir}}/script.txt"
         platform: ["linux", "darwin"]
-      - type: script
+      - type: print
+        args: "{{ hooks.script.script_nix }}"
+        platform: ["linux", "darwin"]
+      - name: script_win
+        type: script
         args:
           - "{{cdf.config_dir}}/script.ps1"
           - "{{cdf.tmp_dir}}/script.txt"
@@ -110,7 +115,7 @@ hooks:
     description: "Print result output"
     ops:
       - type: print
-        args: "{{ result['outputs'] }}}}"
+        args: "{{ result['resources'] }}}}"
   cmd:
     description: "cmd"
     ops:
