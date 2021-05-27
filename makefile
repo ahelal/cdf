@@ -45,6 +45,8 @@ test-unit:
 
 test-integration:
 	pytest -v tests --color=yes --code-highlight=yes
+	@echo "running expect default test"
+	az cdf test -w ./tests/fixtures/bicep/ default
 
 clean:
 	rm -rf build

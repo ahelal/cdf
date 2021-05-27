@@ -4,14 +4,12 @@
 
 CDF is an Azure CLI plugin that will make your life easier to develop, test, maintain, share units, and run IaC code in Azure. currently supports IaC `ARM`, `bicep` and `terraform`.
 
-## Install
+## Install (Dev version)
 
 * Install azure cli >= 2.20.0 + Python >= 3.7 
 * For the current time you need to build the extension
     * `make venv` create python virtual environment-
     * `make install` this will build the extension and install
-
-## Uninstall
 
 To uninstall the extension run `make uninstall`
 

@@ -32,6 +32,16 @@ class AzCDF(unittest.TestCase):
         self.assertIn("Timestamp", json_stdout)
         self.assertEqual(stderr, "")
 
+    def test_cdf_hook_no_args(self):
+        stdout, stderr = run_command("az", ["cdf", "hook", "-w", self.work_dir])
+        json_stdout = json.loads(stdout)
+        number_of_hooks = 14
+        self.assertEqual(len(json_stdout), number_of_hooks)
+        self.assertEqual(stderr, "")
+    def test_cdf_debug_errors(self):
+        with self.assertRaises(ValueError):
+            run_command("az", ["cdf", "debug", "errors","-w", self.work_dir])
+
 class FixtureBicep(unittest.TestCase):
     resource_id = None
     def setUp(self):
@@ -73,6 +83,9 @@ class FixtureBicep(unittest.TestCase):
             stdout, stderr = run_command("az",["resource", "show", "--id", self.__class__.resource_id])
         except ValueError as error:
             self.fail(error)
+
+    def test_1_cdf_up_3_errors(self):
+        run_command("az", ["cdf", "debug", "errors","-w", self.work_dir])
 
     def test_2_cdf_hook_0_az(self):
         stdout, stderr = run_command("az", ["cdf", "hook", "az", "-w", self.work_dir])

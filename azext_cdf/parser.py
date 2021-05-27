@@ -8,7 +8,7 @@ from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKey
 
 from knack.util import CLIError
 from jinja2 import Environment, BaseLoader, StrictUndefined, pass_context, Template
-from jinja2.exceptions import UndefinedError, TemplateSyntaxError
+from jinja2.exceptions import UndefinedError, TemplateSyntaxError, TemplateRuntimeError
 from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname, random_string
 from azext_cdf.state import State
@@ -109,6 +109,7 @@ class ConfigParser:
             Optional("fail", default=False): bool,
             Optional("assert"): Or(str, list),
             Optional("cmd"): Or(str, list),
+            Optional("args"): Or(str, list),
         }
         test_schema = {
             str: {
@@ -364,14 +365,14 @@ class ConfigParser:
             error_context = f"in phase '{phase}'"
         try:
             return self._interpolate_object(phase, template, variables)
-        # except TypeError as e:
-        #     raise CLIError(f"config interpolation error. {error_context}, undefined variable : {str(e)}")
         except UndefinedError as error:
             if raw_undefined_error:
                 raise CLIError(f"undefined variable {str(error)}") from error
-            raise CLIError(f"config interpolation error. {error_context}, undefined variable: {str(error)}") from error
+            raise CLIError(f"expression interpolation error. {error_context}, undefined variable: {str(error)}") from error
         except TemplateSyntaxError as error:
-            raise CLIError(f"config interpolation error. {error_context}, template syntax: {str(error)}") from error
+            raise CLIError(f"expression interpolation error. {error_context}, template syntax: {str(error)}") from error
+        except (TypeError, TemplateRuntimeError) as error:
+            raise CLIError(f"expression interpolation error. {error_context}, Runtime error: {str(error)}") from error
 
     def update_hooks_result(self, hooks_output):
         ''' Update all hooks results and make them available as variables to second phase '''

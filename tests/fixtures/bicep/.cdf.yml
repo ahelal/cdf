@@ -135,6 +135,14 @@ hooks:
     ops:
       - type: cmd
         args: exit 1
+  pre_test:
+    description: "Clean up before running test"
+    lifecycle: "pre-test"
+    ops:
+      - type: print
+        args: Cleaning up {{vars.log_file}}
+      - type: cmd
+        args: "rm -f {{vars.log_file}}"
 #### to do tests
 tests:
   default:
