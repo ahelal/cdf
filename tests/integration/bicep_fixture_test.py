@@ -71,8 +71,19 @@ class FixtureBicep(unittest.TestCase):
         self.assertEqual(len(resource), 1)
         try:
             stdout, stderr = run_command("az",["resource", "show", "--id", self.__class__.resource_id])
-        except Exception as error:
+        except ValueError as error:
             self.fail(error)
+
+    def test_2_cdf_hook_0_az(self):
+        stdout, stderr = run_command("az", ["cdf", "hook", "az", "-w", self.work_dir])
+        self.assertEqual(stderr, "")
+        json_stdout = json.loads(stdout)
+        self.assertEqual(json_stdout["id"].lower(), self.__class__.resource_id.lower())
+
+# script check stdout and stderr
+# print_result
+# cmd
+# fail
 
     def test_3_cdf_down_0(self):
         stdout, stderr = run_command("az", ["cdf", "down", "-w", self.work_dir,  "--yes"])

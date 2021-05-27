@@ -1,8 +1,7 @@
 ---
 name: "ssh_{{ store('postfix', random_string(5, 'lower')) }}"
-resource_group: "github_action_test_main"
+resource_group: "cdf_bicep_{{cdf.name}}"
 location: "eastus2"
-manage_resource_group: false
 
 vars:
   log_file: "{{cdf.tmp_dir}}/hook_log.txt"
@@ -87,7 +86,10 @@ hooks:
   az:
     description: "Run Az CLI"
     ops:
-      - args: show -g {{cdf.resource_group}} -n {{ cdf.name }}
+      - name: show
+        args: resource show --id {{ result.resources[0]['id']}}
+      - type: print
+        args: "{{ hooks.az.show.stdout }}"
   script:
     description: "Run script"
     ops:
@@ -103,15 +105,14 @@ hooks:
           - "{{cdf.config_dir}}/script.ps1"
           - "{{cdf.tmp_dir}}/script.txt"
         platform: ["windows"]
-      - type: call
-        args: log
+
   print_result:
     description: "Print result output"
     ops:
       - type: print
         args: "{{ result['outputs'] }}}}"
   cmd:
-    description: "Run commands"
+    description: "cmd"
     ops:
       - name: A
         type: cmd
@@ -129,7 +130,6 @@ hooks:
     ops:
       - type: cmd
         args: exit 1
-
 #### to do tests
 tests:
   default:
