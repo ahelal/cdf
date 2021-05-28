@@ -116,6 +116,7 @@ class ConfigParser:
             "version": str,
             Optional("source"): (str),
             Optional("key"): (str),
+            Optional("args", default="origin"): (str),
         }
         test_schema = {
             str: {
@@ -159,6 +160,7 @@ class ConfigParser:
         self._validate_conf(cdf_yml_filepath)
         self._setup_jinja2()
         self._setup_pre_phase_interpolation(cdf_yml_filepath)  # pre phase
+        self._setup_load_file_references()
         self._setup_test()
         self._setup_first_phase_interpolation(override_state, remove_tmp)  # First phase
         self._setup_second_phase_variables()  # Second phase
@@ -219,13 +221,16 @@ class ConfigParser:
         self.jinja_env.globals["template_file"] = _template_file
         self.jinja_env.globals["random_string"] = random_string
 
-    def _setup_test(self):
+    def _setup_load_file_references(self):
+        # Load all files from tests
         for test_name in self.data[CONFIG_TESTS].keys():
             if self.data[CONFIG_TESTS][test_name].get(CONFIG_FILE, False):  # load test from another dir
                 self.data[CONFIG_TESTS][test_name][CONFIG_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TESTS][test_name][CONFIG_FILE], f"test {test_name} key {CONFIG_FILE}")
                 test_data = self._read_config(self.data[CONFIG_TESTS][test_name][CONFIG_FILE])
                 self.data[CONFIG_TESTS][test_name] = {**self.data[CONFIG_TESTS][test_name], **test_data}
                 self._validate_conf(self.data[CONFIG_TESTS][test_name][CONFIG_FILE])  # revalidate after loading data
+
+    def _setup_test(self):
         if not self.test:
             return
         self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test_state.json"  # override default state file

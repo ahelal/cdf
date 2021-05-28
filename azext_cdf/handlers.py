@@ -38,12 +38,10 @@ def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_fi
     )
 
 
-def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None, validate=False):
+def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug config handler, dump the configuration file'''
 
     cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
-    if validate:
-        return None
     return cobj.config
 
 
@@ -174,11 +172,9 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
     provision(cmd, cobj)
 
 
-def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_args=None, working_dir=None, state_file=None, always_clean_up=False, always_keep=False):
+def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, state_file=None, exit_on_error=False, down_strategy="success"):
     """ test handler function. Run all tests or specific ones """
 
-    if always_clean_up and always_keep:
-        raise CLIError("You can only use one of flags 'alway-clean' or 'always-keep'.")
     working_dir = os.path.realpath(working_dir)
     cobj, cwd = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
@@ -190,7 +186,7 @@ def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_arg
     else:
         test_args = cobj.tests
 
-    results = run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir, state_file, always_clean_up, always_keep)
+    results = run_test(cmd, cobj, config, cwd, exit_on_error, test_args, working_dir, state_file, down_strategy)
     # print status to screen
     # gen = (x for x in xyz if x not in a)
     one_test_failed = False

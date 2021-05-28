@@ -26,15 +26,13 @@ def load_arguments(self, _):
     with self.argument_context("cdf debug interpolate") as context:
         context.argument("phase", options_list=["--phase", "-p"], help="test your jinja2 expression", default=2)
 
-    with self.argument_context("cdf debug config") as context:
-        context.argument("validate", options_list=["--only-validate", "-x"], help="Only validate", default=False)
-
     with self.argument_context("cdf hook") as context:
         context.positional("hook_args", nargs="*", help="Hook name to run.", default=None)
         context.argument("confirm", options_list=["--yes", "-y"], help="Run hook even if an phase or status are not ready. (Might corrupt state)", default=None)
 
     with self.argument_context("cdf test") as context:
-        context.argument("exit_on_first_error", options_list=["--exit-onerror", "-e"], help="Exit on first failure rather then go through all tests.", default=False)
-        context.argument("always_clean_up", options_list=["--always_clean", "-a"], help="Always de-provision resources to avoid dangling resources.", default=False)
-        context.argument("always_keep", options_list=["--always_keep", "-k"], help="Always keep resources and don't de-provision.", default=False)
+        context.argument("exit_on_error", options_list=["--exit-onerror", "-e"], help="Exit on first failure rather then go through all tests.", default=False)
+        # context.argument("always_clean_up", options_list=["--always_clean", "-a"], help="Always de-provision resources to avoid dangling resources.", default=False)
+        # context.argument("always_keep", options_list=["--always_keep", "-k"], help="Always keep resources and don't de-provision.", default=False)
+        context.argument("down_strategy", options_list=["--down-strategy", "-d"], help="Down strategy after the test run.", default='success', choices=['success', 'always', 'never'])
         context.positional("test_args", nargs="*", help="Test name to run. If none provided will run all.", default=None)

@@ -280,6 +280,15 @@ def random_string(length, option=None):
     return ''.join(random.choice(letters) for i in range(length))
 
 
+def convert_to_list_if_need(var):
+    ''' Checks if var is a list if not return singe element list '''
+    if isinstance(var, list):
+        return var
+    if var is None or var == "":
+        return []
+    return [var]
+
+
 def run_command(bin_path, args=None, interactive=False, cwd=None):
     """
     Run CLI commands
