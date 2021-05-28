@@ -111,6 +111,12 @@ class ConfigParser:
             Optional("cmd"): Or(str, list),
             Optional("args"): Or(str, list),
         }
+        upgrade_from_schema = {
+            "name": str,
+            "version": str,
+            Optional("source"): (str),
+            Optional("key"): (str),
+        }
         test_schema = {
             str: {
                 Optional(CONFIG_FILE): str,
@@ -128,6 +134,7 @@ class ConfigParser:
                     Optional(Or("up", "down")): expect_schema,
                     Optional("hooks"): _list_or_tuple_of({str: expect_schema}),
                 },
+                Optional("upgrade_from"): _list_or_tuple_of(upgrade_from_schema),
             }
         }
         self.schema_def = {
@@ -189,13 +196,19 @@ class ConfigParser:
                 for hook in hooks_ops:
                     if hook not in hooks:
                         raise CLIError(f"unknown hook name'{hook}' in expect test '{test}'")
+            upgrade_from_names = []
+            for upgrade in self.data[CONFIG_TESTS][test].get("upgrade_from", []):
+                name = upgrade.get("name").lower().strip()
+                if name in upgrade_from_names:
+                    raise CLIError(f"upgrade from name'{name}' is duplicated.")
+                upgrade_from_names.append(name)
 
     @staticmethod
     def _read_config(filepath):
         try:
             with open(filepath) as file_in:
                 return yaml.load(file_in, Loader=yaml.FullLoader)
-        except yaml.parser.ParserError as error:
+        except (yaml.parser.ParserError, yaml.scanner.ScannerError) as error:
             raise CLIError(f"Config file '{filepath}' yaml parser error:': {str(error)}") from error
         except FileNotFoundError as error:
             raise CLIError(f"Config file '{filepath}' file not found:': {str(error)}") from error
@@ -207,15 +220,15 @@ class ConfigParser:
         self.jinja_env.globals["random_string"] = random_string
 
     def _setup_test(self):
+        for test_name in self.data[CONFIG_TESTS].keys():
+            if self.data[CONFIG_TESTS][test_name].get(CONFIG_FILE, False):  # load test from another dir
+                self.data[CONFIG_TESTS][test_name][CONFIG_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TESTS][test_name][CONFIG_FILE], f"test {test_name} key {CONFIG_FILE}")
+                test_data = self._read_config(self.data[CONFIG_TESTS][test_name][CONFIG_FILE])
+                self.data[CONFIG_TESTS][test_name] = {**self.data[CONFIG_TESTS][test_name], **test_data}
+                self._validate_conf(self.data[CONFIG_TESTS][test_name][CONFIG_FILE])  # revalidate after loading data
         if not self.test:
             return
         self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test_state.json"  # override default state file
-        if self.data[CONFIG_TESTS][self.test].get(CONFIG_FILE, False):  # load test from another dir
-            self.data[CONFIG_TESTS][self.test][CONFIG_FILE] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TESTS][self.test][CONFIG_FILE], f"test {self.test} key {CONFIG_FILE}")
-            test_data = self._read_config(self.data[CONFIG_TESTS][self.test][CONFIG_FILE])
-            self.data[CONFIG_TESTS][self.test] = {**self.data[CONFIG_TESTS][self.test], **test_data}
-            self._validate_conf(self.data[CONFIG_TESTS][self.test][CONFIG_FILE])  # revalidate after loading data
-
         self.data[CONFIG_NAME] = self.data[CONFIG_TESTS][self.test].get(CONFIG_NAME, f"{self.data[CONFIG_NAME]}_{self.test}_test")
         self.data[CONFIG_TESTS][self.test][CONFIG_DESCRIPTION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_DESCRIPTION, f"{self.data[CONFIG_NAME]} {self.test} test")
         self.data[CONFIG_LOCATION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_LOCATION, self.data[CONFIG_LOCATION])
