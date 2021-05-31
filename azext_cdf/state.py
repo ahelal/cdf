@@ -7,34 +7,8 @@ from knack.util import CLIError
 from knack.log import get_logger
 from azext_cdf.utils import json_write_to_file, file_exists, file_read_content, json_load, file_http_write_json_content, file_http_read_json_content
 from azext_cdf.version import VERSION
-
-STATE_PHASE_UNKNOWN = "unknown"
-STATE_PHASE_GOING_UP = "transitioning_up"
-STATE_PHASE_UP = "up"
-STATE_PHASE_TESTED = "tested"
-STATE_PHASE_TESTING = "testing"
-STATE_PHASE_DOWN = "down"
-STATE_PHASE_GOING_DOWN = "transitioning_down"
-STATE_PHASE_RUNNING_HOOK = "running_hook"
-
-STATE_STATUS_UNKNOWN = "unknown"
-STATE_STATUS_SUCCESS = "success"
-STATE_STATUS_ERROR = "errored"
-STATE_STATUS_FAILED = "failed"
-STATE_STATUS_PENDING = "pending"
-
-STATE_DEPLOYMENT_NAME = "name"
-STATE_RESOURCE_GROUP = "resource_group"
-STATE_PHASE = "phase"
-STATE_LASTUPDATE = "lastUpdate"
-STATE_STATUS = "status"
-STATE_EVENTS = "events"
-STATE_UP_RESULT = "result"
-STATE_UP_RESULT_OUTPUTS = "outputs"
-STATE_UP_RESULT_RESOURCES = "resources"
-STATE_HOOKS_RESULT = "hooks"
-STATE_VERSION = "version"
-STATE_STORE = "store"
+# pylint: disable=W0401,W0614
+from azext_cdf._def import *
 
 _LOGGER = get_logger(__name__)
 

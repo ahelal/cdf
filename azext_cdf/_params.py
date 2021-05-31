@@ -19,6 +19,7 @@ def load_arguments(self, _):
 
     with self.argument_context("cdf down") as context:
         context.argument("remove_tmp", options_list=["--remove-tmp", "-r"], help="Remove temp directory content and recreate the dir", default=False)
+        context.argument("clear_tests", options_list=["--tests", "-t"], help="Also bring down down tests if any", default=False)   # todo add this
 
     with self.argument_context("cdf status") as context:
         context.argument("events", options_list=["--events", "-e"], help="Print also events", default=False)
@@ -34,5 +35,6 @@ def load_arguments(self, _):
         context.argument("exit_on_error", options_list=["--exit-onerror", "-e"], help="Exit on first failure rather then go through all tests.", default=False)
         # context.argument("always_clean_up", options_list=["--always_clean", "-a"], help="Always de-provision resources to avoid dangling resources.", default=False)
         # context.argument("always_keep", options_list=["--always_keep", "-k"], help="Always keep resources and don't de-provision.", default=False)
+        context.argument("upgrade_strategy", options_list=["--upgrade-strategy", "-u"], help="Upgrade strategy for the test run.", default='all', choices=['all', 'fresh', 'upgrade'])
         context.argument("down_strategy", options_list=["--down-strategy", "-d"], help="Down strategy after the test run.", default='success', choices=['success', 'always', 'never'])
         context.positional("test_args", nargs="*", help="Test name to run. If none provided will run all.", default=None)

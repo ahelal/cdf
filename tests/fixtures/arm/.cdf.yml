@@ -1,0 +1,43 @@
+---
+name: "ssh_{{ store('postfix', random_string(5, 'lower')) }}"
+resource_group: "test_cdf_bicep_{{cdf.name}}"
+location: "eastus2"
+
+params:
+  name: "{{cdf.name}}_key"
+  location: "{{cdf.location}}"
+  key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrs/zJhwDvfjcmXiwlabkZMs7qjA0hl9c3RXBpWYQx2Ps/lhN/I043LsU1zAFPg9P5qaqzVjc73Zky2tZ8qVFKuHAUV8ccwLEwuvWmeqFTK5of6Dt/fuWRbCfpZDcq1nqp+v9bG+OhdNhOUMJFCbFWpHpAP95IOSo9YXeFLdegqMEm8zzgKojYE7RVrrejejmhZcoRMNZj4pxPk/FTqVoTR4C5lzZMBR0XLY/kzq4ay/LfAKyJ+EaNOeFOv/pCIw69DqBDqLiMUwHJLmGkw9azdT6FBXIQhhfeEilItQzfOnzTOh87Xvhv/z0fuhPynUbT6KWX0GO5oTRXE5Xf+TGR"
+
+provisioner: "arm"
+up: "{{ cdf.config_dir }}/ssh.json"
+
+hooks:
+  fail:
+    ops: [{ type: cmd, args: exit 1 }]
+  pass:
+    ops: [{ type: cmd, args: exit 0 }]
+
+upgrade:
+  - name: previous_version
+    type: local
+    path: ../arm-1
+    git_version: "{{cdf.resource_group}}"
+    from_expect: ["default"]
+
+  # - name: last_tag
+  #   type: git
+  #   source: .
+  #   git_version: "{{cdf.resource_group}}"
+  #   from_expect: ["default", "a"]
+
+tests:
+  default:
+    expect:
+      up:
+        fail: false
+  fail:
+    params:
+      location: "sss"
+    expect:
+      up:
+        fail: false

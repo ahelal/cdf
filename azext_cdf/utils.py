@@ -9,11 +9,13 @@ import random
 import string
 import shutil
 import subprocess
+import shlex
 import requests
 import yaml
 from knack.log import get_logger
 from knack.util import CLIError
 import azure.cli.core.commands.progress as progress
+from azext_cdf._def import CONFIG_STATE_FILEPATH, CONFIG_STATE_FILENAME
 # from azext_cdf.parser import ConfigParser
 
 _LOGGER = get_logger(__name__)
@@ -61,12 +63,16 @@ class Progress():
 
 
 # TODO should be refactored into parser code
-def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None, test=None):
+def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None):
     ''' return config obj and cwd'''
     cwd = os.getcwd()
-    if working_dir:
-        dir_change_working(working_dir)
-    return config_parser(config, remove_tmp, state_file, test=test), cwd
+    override_config = {}
+    if state_file:
+        override_config = {
+            CONFIG_STATE_FILENAME: os.path.basename(state_file),
+            CONFIG_STATE_FILEPATH: f"file://{os.path.dirname(state_file)}",
+        }
+    return config_parser(cdf_yml_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config), cwd
 
 
 def real_dirname(dir_path):
@@ -280,6 +286,13 @@ def random_string(length, option=None):
     return ''.join(random.choice(letters) for i in range(length))
 
 
+def convert_to_shlex_arg(var):
+    ''' Checks if var is a str and converts to args with shlex '''
+    if isinstance(var, str):
+        return shlex.split(var)
+    return var
+
+
 def convert_to_list_if_need(var):
     ''' Checks if var is a list if not return singe element list '''
     if isinstance(var, list):
@@ -287,6 +300,18 @@ def convert_to_list_if_need(var):
     if var is None or var == "":
         return []
     return [var]
+
+
+def dict_lookup(dictionary, keys):
+    ''' Returns an object using dot notation from keys in dict d'''
+    try:
+        if "." in keys:
+            key, rest = keys.split(".", 1)
+            return dict_lookup(dictionary[key], rest)
+
+        return dictionary[keys]
+    except KeyError:
+        return None
 
 
 def run_command(bin_path, args=None, interactive=False, cwd=None):

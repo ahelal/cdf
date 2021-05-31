@@ -1,6 +1,6 @@
 ---
 name: "ssh_{{ store('postfix', random_string(5, 'lower')) }}"
-resource_group: "cdf_bicep_{{cdf.name}}"
+resource_group: "test_cdf_bicep_{{cdf.name}}"
 location: "eastus2"
 
 vars:
@@ -143,6 +143,21 @@ hooks:
         args: Cleaning up {{vars.log_file}}
       - type: cmd
         args: "rm -f {{vars.log_file}}"
+
+upgrade:
+  - name: older
+    type: local
+    path: .
+    # git_version: "{{cdf.resource_group}}"
+
+  # - name: a
+  #   version: PREVIOUS_TAG | PREVIOUS_HASH | BRANCH
+  #   source: .
+  # key: x
+  # - name: ab
+  #   version: PREVIOUS_TAG - 2 | PREVIOUS_HASH | BRANCH
+  #   source: .
+  #   key: x
 #### to do tests
 tests:
   default:

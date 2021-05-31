@@ -12,6 +12,7 @@ from mock import patch
 from knack.util import CLIError
 from azext_cdf.parser import ConfigParser
 from azext_cdf.version import VERSION
+from azext_cdf._def import CONFIG_STATE_FILEPATH, CONFIG_STATE_FILENAME
 
 # pylint: disable=C0111
 class BasicParser(unittest.TestCase):
@@ -20,6 +21,10 @@ class BasicParser(unittest.TestCase):
         self.config = {"name": "cdf_simple", "resource_group": "rg", "location": "loc"}
         self.config['tmp_dir'] = self.dirpath
         self.state_file = f"{self.dirpath}/{''.join(random.sample(string.ascii_lowercase, 25))}.json"
+        self.override_config = {
+            CONFIG_STATE_FILENAME: os.path.basename(self.state_file),
+            CONFIG_STATE_FILEPATH: f"file://{os.path.dirname(self.state_file)}",
+        }
     def tearDown(self):
         shutil.rmtree(self.dirpath)
 
@@ -39,7 +44,7 @@ class SimpleParser(BasicParser):
         default_state_file = f"{os.getcwd()}/.cdf_tmp/state.json"
         default_tmp_dir = f"{os.getcwd()}/.cdf_tmp"
         mock_read_config.return_value = self.config
-        parser = ConfigParser(f"{os.getcwd()}/config.yml", remove_tmp=False, override_state=None, test=None)
+        parser = ConfigParser(f"{os.getcwd()}/config.yml")
         self.assertEqual(parser.name, self.config["name"])
         self.assertEqual(parser.resource_group_name, self.config["resource_group"])
         self.assertEqual(parser.location, self.config["location"])
@@ -50,8 +55,8 @@ class SimpleParser(BasicParser):
         self.assertEqual(parser.deployment_mode, False)
         self.assertEqual(parser.config_dir, os.getcwd())  # abs path
         self.assertEqual(parser.tests, [])
-        self.assertEqual(parser.hook_names, [])
-        self.assertEqual(list(parser.hooks_dict), [])
+        self.assertEqual(parser.get_hooks(format_list=True), [])
+        self.assertEqual(list(parser.get_hooks(format_list=False)), [])
         self.assertTrue(os.path.exists(default_state_file))
         with open(default_state_file) as json_file:
             data = json.load(json_file)
@@ -62,7 +67,7 @@ class SimpleParser(BasicParser):
         empty_config = {}
         mock_read_config.return_value = empty_config
         with self.assertRaises(CLIError) as context:
-            ConfigParser("/path/config", remove_tmp=False, override_state=None, test=None)
+            ConfigParser("/path/config")
         self.assertTrue('name' in str(context.exception))
         self.assertTrue('resource_group' in str(context.exception))
         self.assertTrue('location' in str(context.exception))
@@ -75,7 +80,7 @@ class PathsParser(BasicParser):
     @patch.object(ConfigParser, '_read_config')
     def test_override_state(self, mock_read_config):
         mock_read_config.return_value = self.config
-        parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+        parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_config=self.override_config)
         self.assertEqual(parser.name, self.config["name"])
         self.assertEqual(parser.config_dir, f"{os.getcwd()}/path_a/path_b")  # relative path
         self.assertTrue(os.path.exists(self.state_file))
@@ -84,9 +89,9 @@ class PathsParser(BasicParser):
     def test_abs_path_config(self, mock_read_config):
         self.config["name"] = "test_abs_path_config"
         mock_read_config.return_value = self.config
-        parser = ConfigParser("/path_a/path_b/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+        parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_config=self.override_config)
         self.assertEqual(parser.name, self.config["name"])
-        self.assertEqual(parser.config_dir, "/path_a/path_b")  # abs path
+        self.assertEqual(parser.config_dir, f"{os.getcwd()}/path_a/path_b")  # abs path
         self.assertTrue(os.path.exists(self.state_file))
 
 class InterpolateParser(BasicParser):
@@ -95,10 +100,10 @@ class InterpolateParser(BasicParser):
         self.config["name"] = "cdf_test_first_stage"
         # self.config["vars"] = {"cdf_builtin":"{{cdf.name}}_{{cdf.resource_group}}_{{cdf.location}}"}
         mock_read_config.return_value = self.config
-        parser = ConfigParser("/path_a/path_b/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+        parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_config=self.override_config)
         # interpolate_txt = parser.interpolate(1, "{{cdf.name}}.{{cdf.resource_group}}.{{cdf.location}}", context="test", extra_vars=None, raw_undefined_error=False)
         self.assertEqual(parser.interpolate(1, "{{cdf.name}}.{{cdf.resource_group}}.{{cdf.location}}"), "cdf_test_first_stage.rg.loc")
-        self.assertEqual(parser.interpolate(1, "{{cdf.config_dir}}"), "/path_a/path_b")
+        self.assertEqual(parser.interpolate(1, "{{cdf.config_dir}}"), f"{os.getcwd()}/path_a/path_b")
         self.assertEqual(parser.interpolate(1, "{{cdf.tmp_dir}}"), self.dirpath)
         self.assertEqual(parser.interpolate(1, "{{cdf.version}}"), VERSION)
         self.assertEqual(parser.interpolate(1, "{{cdf.platform}}"), platform.system().lower())
@@ -109,7 +114,7 @@ class InterpolateParser(BasicParser):
         mock_read_config.return_value = self.config
         os.environ["TEST_ENV_1"] = "One"
         os.environ["TEST_ENV_2"] = "Two"
-        parser = ConfigParser("/path/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+        parser = ConfigParser("/path/c.yml", remove_tmp=False, override_config=self.override_config)
         self.assertEqual(parser.interpolate(1, "{{env.TEST_ENV_1}}.{{env.TEST_ENV_2}}"), "One.Two")
 
     @patch.object(ConfigParser, '_read_config')
@@ -118,7 +123,7 @@ class InterpolateParser(BasicParser):
         self.config["vars"] = {"a": 1, "b": "2", "c": {"a": 1}, "d": False, "e": [1, 2],
                                "f": "{{cdf.name}}", "g": "{{vars.a}}"}
         mock_read_config.return_value = self.config
-        parser = ConfigParser("/path/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+        parser = ConfigParser("/path/c.yml", remove_tmp=False, override_config=self.override_config)
         self.assertEqual(parser.interpolate(1, "{{vars.a}}.{{vars.b}}"), "1.2")
         self.assertEqual(parser.interpolate(1, "{{vars.c.a}}"), "1")
         self.assertEqual(parser.interpolate(1, "{{vars.d}}"), "False")
@@ -137,7 +142,7 @@ class InterpolateParser(BasicParser):
         self.config["vars"] = {"h": "{{vars.i}}", "i": "{{vars.h}}"}
         mock_read_config.return_value = self.config
         with self.assertRaises(CLIError) as context:
-            ConfigParser("/path/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+            ConfigParser("/path/c.yml", remove_tmp=False, override_config=self.override_config)
         self.assertTrue('undefined variable' in str(context.exception))
 
     @patch.object(ConfigParser, '_read_config')
@@ -145,7 +150,7 @@ class InterpolateParser(BasicParser):
         self.config["name"] = "test_jinja2_filters"
         self.config["vars"] = {"a": 1}
         mock_read_config.return_value = self.config
-        parser = ConfigParser("/path/c.yml", remove_tmp=False, override_state=f"file:///{self.state_file}", test=None)
+        parser = ConfigParser("/path/c.yml", remove_tmp=False, override_config=self.override_config)
         # write static file
         with open(f"{self.dirpath}/static.txt", "w") as static_file:
             static_file.write("helloStatic")

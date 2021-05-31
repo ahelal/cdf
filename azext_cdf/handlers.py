@@ -8,14 +8,11 @@ from knack.log import get_logger
 from azure.cli.command_modules.resource.custom import run_bicep_command
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
-# TODO LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.version import VERSION
-from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists
+from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists, convert_to_list_if_need
 from azext_cdf.utils import Progress, init_config
 from azext_cdf.hooks import run_hook
-from azext_cdf.state import STATE_PHASE_UP
-# TODO STATE_PHASE_TESTED, STATE_PHASE_TESTING,
-from azext_cdf.state import STATE_STATUS_SUCCESS
+from azext_cdf._def import STATE_PHASE_UP, STATE_STATUS_SUCCESS
 from azext_cdf.provisioner import de_provision, provision, check_deployment_error
 from azext_cdf.tester import run_test
 from azext_cdf.parser import ConfigParser
@@ -117,15 +114,13 @@ def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, c
     cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     if not hook_args:
         output_hooks = []
-        for key, value in cobj.hooks_dict:
-            lifecycle = value["lifecycle"]
-            if isinstance(lifecycle, str):
-                lifecycle = [lifecycle]
+        for key, value in cobj.get_hooks(format_list=False):
+            lifecycle = convert_to_list_if_need(value["lifecycle"])
             output_hooks.append({"name": key, "description": value["description"], "lifecycle": lifecycle})
         return output_hooks
 
     hook_name = hook_args[0]  # hook is the first arg
-    hooks_names = cobj.hook_names
+    hooks_names = cobj.get_hooks(format_list=True)
     if hook_name not in hooks_names:
         raise CLIError(f"unknown hook name '{hook_name}', Supported hooks '{hooks_names}")
     status = cobj.state.status
@@ -172,28 +167,30 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
     provision(cmd, cobj)
 
 
-def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, state_file=None, exit_on_error=False, down_strategy="success"):
+def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, state_file=None, exit_on_error=False, down_strategy="success", upgrade_strategy="all"):
     """ test handler function. Run all tests or specific ones """
 
     working_dir = os.path.realpath(working_dir)
-    cobj, cwd = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    cobj = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)[0]
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
-    dir_change_working(cwd)
-    if test_args:
-        for test in test_args:
-            if test not in cobj.tests:
-                raise CLIError(f"unknown test name '{test}', Supported hooks '{cobj.tests}")
-    else:
+    dir_change_working(working_dir)
+    if not test_args:
         test_args = cobj.tests
+    for test in test_args:
+        if test not in cobj.tests:
+            raise CLIError(f"unknown test name '{test}', Supported tests '{cobj.tests}")
 
-    results = run_test(cmd, cobj, config, cwd, exit_on_error, test_args, working_dir, state_file, down_strategy)
+    results = run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_strategy, upgrade_strategy)
     # print status to screen
-    # gen = (x for x in xyz if x not in a)
     one_test_failed = False
-    for test in results:
-        if results[test]["failed"]:
-            one_test_failed = True
-            _LOGGER.warning(results[test])
+    upgrade_failed = []
+    for upgrade in results:
+        for test_name in results[upgrade]:
+            test = results[upgrade][test_name]
+            if test["failed"]:
+                upgrade_failed.append(upgrade)
+                one_test_failed = True
+                _LOGGER.warning(test)
     if one_test_failed:
-        raise CLIError("At-least on test failed")
+        raise CLIError(f"At-least on test failed in the following upgrades paths: {set(upgrade_failed)}")
     return results
