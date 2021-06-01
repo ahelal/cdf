@@ -9,7 +9,6 @@ from azure.cli.command_modules.resource.custom import build_bicep_file
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, delete_resource, show_resource
 from azure.cli.core.commands.client_factory import get_subscription_id
 from azure.core.exceptions import ResourceNotFoundError
-from msrestazure.azure_exceptions import CloudError
 from azext_cdf._def import CONFIG_PARAMS, LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN
 from azext_cdf._def import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
 from azext_cdf.hooks import run_hook_lifecycle
@@ -55,7 +54,6 @@ def _resource_group_exists(cmd, resource_group):
     except ResourceNotFoundError:
         return False
     return True
-
 
 
 def de_provision(cmd, cobj):
