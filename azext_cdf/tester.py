@@ -7,7 +7,7 @@ from knack.util import CLIError
 from knack.log import get_logger
 from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg
 from azext_cdf.parser import ConfigParser
-from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME
+from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME, CONFIG_STATE_FILENAME
 from azext_cdf.hooks import run_hook_lifecycle
 from azext_cdf.provisioner import de_provision, provision, run_command
 from azext_cdf.hooks import run_hook
@@ -157,7 +157,7 @@ def _manage_git_upgrade():
 
 
 def _prepera_upgrade(upgrade_path, config, working_dir, test_name, prefix):
-    override_config = {"CONFIG_STATE_FILENAME": f"test_{prefix}_{test_name}_state.json"}
+    override_config = {CONFIG_STATE_FILENAME: f"test_{prefix}_{test_name}_state.json"}
     if upgrade_path.get("from_expect") is None:
         return ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
     # Need to provision

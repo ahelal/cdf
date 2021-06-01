@@ -44,7 +44,7 @@ test-unit:
 	pytest -v azext_cdf --color=yes --code-highlight=yes
 
 test-integration:
-	pytest -v tests --color=yes --code-highlight=yes
+	pytest -v tests --color=yes --code-highlight=yes -s
 	@echo "running expect default test"
 	az cdf test -w ./tests/fixtures/bicep/ --down-strategy=always default 
 
