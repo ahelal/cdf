@@ -87,7 +87,7 @@ hooks:
     description: "Run Az CLI"
     ops:
       - name: show
-        args: resource show --id {{ result.resources[0]['id']}}
+        args: resource show --id {{ result.resources[0]['id']}} --query 'resourceGroup'
       - type: print
         args: "{{ hooks.az.show.stdout }}"
   script:
