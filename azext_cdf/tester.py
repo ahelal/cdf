@@ -109,7 +109,7 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, result, **kw
         _LOGGER.warning("Failed to clean up %s, %s", test_name, str(result[phase_name]["msg"]))
 
     if exit_on_error and failed_expection:
-        raise CLIError(f"test '{test_name}' failed with msg '{result['msg']}")
+        raise CLIError(f"test '{test_name}' failed with msg '{result.get('msg', '')}")
 
 
 def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_strategy):
@@ -142,7 +142,7 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
     # ** Down and Down expect**
     expect_obj = test_cobj.get_test(test_name, expect="down")
     down_object = [{CONFIG_NAME: "de-provisioning", "fail_override": expect_obj.get("fail", False), "func": _run_de_provision},
-                   {CONFIG_NAME: "de-provisioning", "fail_override": False, "func": _run_expect_tests}]
+                   {CONFIG_NAME: "de-provision expect", "fail_override": False, "func": _run_expect_tests}]
     for i in down_object:
         _phase_cordinator(cmd, test_cobj, i["func"], i[CONFIG_NAME], expect_obj, result, test_name=test_name, exit_on_error=exit_on_error, down_strategy=down_strategy, fail=i["fail_override"])
         if result["failed"]:

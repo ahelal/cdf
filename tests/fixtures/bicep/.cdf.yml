@@ -144,20 +144,6 @@ hooks:
       - type: cmd
         args: "rm -f {{vars.log_file}}"
 
-upgrade:
-  - name: older
-    type: local
-    path: .
-    # git_version: "{{cdf.resource_group}}"
-
-  # - name: a
-  #   version: PREVIOUS_TAG | PREVIOUS_HASH | BRANCH
-  #   source: .
-  # key: x
-  # - name: ab
-  #   version: PREVIOUS_TAG - 2 | PREVIOUS_HASH | BRANCH
-  #   source: .
-  #   key: x
 #### to do tests
 tests:
   default:
