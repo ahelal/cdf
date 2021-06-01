@@ -1,5 +1,5 @@
 ---
-name: "ssh_{{ store('postfix', random_string(5, 'lower')) }}"
+name: "ssh_b_{{ store('postfix', random_string(5, 'lower')) }}"
 resource_group: "test_cdf_bicep_{{cdf.name}}"
 location: "eastus2"
 

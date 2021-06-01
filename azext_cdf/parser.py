@@ -184,7 +184,7 @@ class ConfigParser:
         try:
             with open(filepath) as file_in:
                 return yaml.load(file_in, Loader=yaml.FullLoader)
-        except (yaml.parser.ParserError, yaml.scanner.ScannerError) as error:
+        except (yaml.parser.ParserError, yaml.scanner.ScannerError, yaml.constructor.ConstructorError) as error:
             raise CLIError(f"Config file '{filepath}' yaml parser error:': {str(error)}") from error
         except FileNotFoundError as error:
             raise CLIError(f"Config file '{filepath}' file not found:': {str(error)}") from error

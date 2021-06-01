@@ -12,3 +12,4 @@
 * Status should attempt to reconcile with ARM and update real status
 * Check if a deployment is running and connect instead of redeploying or deleting
 * Implement generic rest interface to run cdf by HTTP2
+* Support fire and forget mode in ops
