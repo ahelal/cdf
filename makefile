@@ -6,7 +6,7 @@ EXTENTION_NAME := cdf
 # all: source-venv
 
 source-venv: $(VENV)/bin/activate
-
+test: test-lint test-unit test-integration
 venv:
 	python3 -m venv $(VENV)
 	pip3 install -r dev-requirements.txt
@@ -20,6 +20,12 @@ uninstall:
 install: build uninstall
 	az extension add --upgrade -y --source ./dist/$(EXTENTION_NAME)*.whl
 
+docker-build:
+	@echo "VERSION: $$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)"
+	docker build -t cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs) .
+docker-run:
+	docker run -v $$(pwd):/cdf -it cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)
+
 test-lint:
 # stop the build if there are Python syntax errors or undefined names
 	@echo "***** Running flake8 syntax  *****"
@@ -27,14 +33,20 @@ test-lint:
 	
 # exit-zero treats all errors as warnings.
 	@echo "***** Running flake8 warning *****"
-	flake8 azext_cdf --count --exit-zero --max-complexity=10 --max-line-length=200 --statistics --exclude *_test.py
+	flake8 azext_cdf --count --exit-zero --ignore=F405 --max-complexity=10 --max-line-length=200 --statistics --exclude *_test.py  
 
 # pylint
 	@echo "***** Running pylint *****"
-	pylint azext_cdf
+	pylint --ignore-patterns=".*_test.py" azext_cdf
+
 test-unit:
-	# python3 -m unittest discover -s . -p '*_test.py' -v
-	pytest -v
+	# python3 -m unittest discover -s azext_cdf -p '*_test.py' -v
+	pytest -v azext_cdf --color=yes --code-highlight=yes
+
+test-integration:
+	pytest -v tests --color=yes --code-highlight=yes -s
+	@echo "running expect default test"
+	az cdf test -w ./tests/fixtures/bicep/ --down-strategy=always default 
 
 clean:
 	rm -rf build

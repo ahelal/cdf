@@ -1,0 +1,78 @@
+''' Definition '''
+
+FIRST_PHASE = 1
+SECOND_PHASE = 2
+LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN = "pre-up", "post-up", "pre-down", "post-down"
+LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL = "pre-test", "post-test", ""
+# Runtime vars
+RUNTIME_ENV_KEY = "env"
+RUNTIME_RESULT = "result"
+RUNTIME_RESULT_OUTPUTS = "outputs"
+RUNTIME_RESULT_RESOURCES = "resources"
+RUNTIME_HOOKS = "hooks"
+RUNTIME_RUN_ONCE_KEY = "once"
+RUNTIME_RUN_ONCE = "_ONCE_ONCE_"
+# Config
+CONFIG_NAME = "name"
+CONFIG_RG = "resource_group"
+CONFIG_RG_MANAGED = "manage_resource_group"
+CONFIG_LOCATION = "location"
+CONFIG_SUPPORTED_PROVISIONERS = ('bicep', 'arm', 'terraform')
+CONFIG_PROVISIONER = "provisioner"
+CONFIG_SCOPE = "scope"
+CONFIG_TMP = "tmp_dir"
+CONFIG_UP = "up"
+CONFIG_VARS = "vars"
+CONFIG_PARAMS = "params"
+CONFIG_STATE_FILENAME = "state_filename"
+CONFIG_STATE_FILEPATH = "state_Path"
+CONFIG_HOOKS = "hooks"
+CONFIG_TESTS = "tests"
+CONFIG_UPGRADE = "upgrade"
+CONFIG_CDF = "cdf"
+CONFIG_TYPE = "type"
+CONFIG_FILE = "file"
+CONFIG_DEPLOYMENT_COMPLETE = "complete_deployment"
+CONFIG_STATE_FILEPATH_DEFAULT = "file://{{ cdf.tmp_dir }}"
+CONFIG_STATE_FILENAME_DEFAULT = "state.json"
+CONFIG_CMD = "cmd"
+CONFIG_ARGS = "args"
+CONFIG_EXPECT = "expect"
+CONFIG_EXPECT_FAIL = "fail"
+CONFIG_EXPECT_ASSERT = "assert"
+CONFIG_EXPECT_CMD = CONFIG_CMD
+CONFIG_EXPECT_ARGS = CONFIG_ARGS
+CONFIG_SUPPORTED_PLATFORM = ("linux", "windows", "darwin", "")
+CONFIG_SUPPORTED_OPS_TYPES = ("az", "cmd", "print", "call", "script")
+CONFIG_SUPPORTED_UPGRADE_TYPES = ("local", "git")
+CONFIG_SUPPORTED_OPS_MODE = ('wait', "interactive")
+CONFIG_DESCRIPTION = "description"
+CONFIG_SUPPORTED_LIFECYCLE = (LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN, LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL)
+
+STATE_PHASE_UNKNOWN = "unknown"
+STATE_PHASE_GOING_UP = "transitioning_up"
+STATE_PHASE_UP = "up"
+STATE_PHASE_TESTED = "tested"
+STATE_PHASE_TESTING = "testing"
+STATE_PHASE_DOWN = "down"
+STATE_PHASE_GOING_DOWN = "transitioning_down"
+STATE_PHASE_RUNNING_HOOK = "running_hook"
+
+STATE_STATUS_UNKNOWN = "unknown"
+STATE_STATUS_SUCCESS = "success"
+STATE_STATUS_ERROR = "errored"
+STATE_STATUS_FAILED = "failed"
+STATE_STATUS_PENDING = "pending"
+
+STATE_DEPLOYMENT_NAME = "name"
+STATE_RESOURCE_GROUP = "resource_group"
+STATE_PHASE = "phase"
+STATE_LASTUPDATE = "lastUpdate"
+STATE_STATUS = "status"
+STATE_EVENTS = "events"
+STATE_UP_RESULT = "result"
+STATE_UP_RESULT_OUTPUTS = "outputs"
+STATE_UP_RESULT_RESOURCES = "resources"
+STATE_HOOKS_RESULT = "hooks"
+STATE_VERSION = "version"
+STATE_STORE = "store"

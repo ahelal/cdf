@@ -1,0 +1,48 @@
+description: "Default "
+params:
+  tags: "{{ vars.tags }}"
+
+vars:
+  extra: overwritten
+  match_name: "{{cdf.name}}_key"
+  log_file: "{{cdf.tmp_dir}}/{{cdf.name}}_log.txt"
+  hook_log_up: "pre-upall-upall-uppost-up"
+  hook_log_down: "pre-downall-downall-downpost-down"
+  tags:
+    env: "tests"
+
+expect:
+  up:
+    fail: false
+    assert:
+      - "{{ result.outputs.helloword.value == 'Hello' }}"
+      - "{{ result.outputs.name.value == vars.match_name }}"
+      - "{{ result.outputs.extra.value == 'overwritten' }}"
+      - "{{ result.outputs.tags.value == vars.tags }}"
+      - "{{ result.resources | length == 1 }}"
+      - "{{ include_file(vars.log_file).replace('\n','') == vars.hook_log_up }}"
+      - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'pre-up') | list | length == 1 }}"
+      - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'post-up') | list | length == 1 }}"
+      - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'all-up') | list | length == 2 }}"
+    # cmd:
+    #   - az resource show --id {{ result.resources[0].id }}
+
+  down:
+    fail: false
+    assert:
+      - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'pre-down') | list | length == 1 }}"
+      - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'post-down') | list | length == 1 }}"
+      - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'all-down') | list | length == 2 }}"
+  hooks:
+    - fail:
+        fail: True
+    - print_audit:
+        args: world
+        assert:
+          - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'print_audit world') | list | length == 1 }}"
+    - az:
+        assert:
+          - "{{ cdf.name | lower in hooks.az.show.stdout| lower }}"
+# TODO
+# CMD
+# script

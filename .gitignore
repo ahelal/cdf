@@ -140,3 +140,7 @@ cython_debug/
 .cdf_tmp
 .tmp
 .vscode
+
+.DS_STORE
+#
+devlogin.sh

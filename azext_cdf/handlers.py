@@ -8,100 +8,18 @@ from knack.log import get_logger
 from azure.cli.command_modules.resource.custom import run_bicep_command
 from azure.cli.core.util import user_confirmation
 from azure.cli.core import __version__ as azure_cli_core_version
-from azext_cdf.parser import LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN
-# TODO LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, LIFECYCLE_ALL
 from azext_cdf.version import VERSION
-from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists
+from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists, convert_to_list_if_need
 from azext_cdf.utils import Progress, init_config
-from azext_cdf.hooks import run_hook, run_hook_lifecycle
-from azext_cdf.state import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
-# TODO STATE_PHASE_TESTED, STATE_PHASE_TESTING,
-from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR
+from azext_cdf.hooks import run_hook
+from azext_cdf._def import STATE_PHASE_UP, STATE_STATUS_SUCCESS
 from azext_cdf.provisioner import de_provision, provision, check_deployment_error
 from azext_cdf.tester import run_test
 from azext_cdf.parser import ConfigParser
 
 _LOGGER = get_logger(__name__)
-
 CONFIG_DEFAULT = ".cdf.yml"
-
-
 # pylint: disable=unused-argument
-def test_handler(cmd, config=CONFIG_DEFAULT, exit_on_first_error=False, test_args=None, working_dir=None, state_file=None, always_clean_up=False, always_keep=False):
-    """ test handler function. Run all tests or specific ones """
-
-    if always_clean_up and always_keep:
-        raise CLIError("You can only use one of flags 'alway-clean' or 'always-keep'.")
-    working_dir = os.path.realpath(working_dir)
-    cobj, cwd = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
-    Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
-    dir_change_working(cwd)
-    if test_args:
-        for test in test_args:
-            if test not in cobj.tests:
-                raise CLIError(f"unknown test name '{test}', Supported hooks '{cobj.tests}")
-    else:
-        test_args = cobj.tests
-
-    results = run_test(cmd, cobj, config, cwd, exit_on_first_error, test_args, working_dir, state_file, always_clean_up, always_keep)
-    # print status to screen
-    # gen = (x for x in xyz if x not in a)
-    one_test_failed = False
-    for test in results:
-        if results[test]["failed"]:
-            one_test_failed = True
-            _LOGGER.warning(results[test])
-    if one_test_failed:
-        raise CLIError("At-least on test failed")
-    return results
-
-
-def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None, state_file=None):
-    ''' init handler '''
-
-    # cobj, _ = init_config(config, False, working_dir)
-    # TODO create an initial environment
-    _LOGGER.info("Init")
-
-
-def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, confirm=False, state_file=None):
-    """ hook handler function. list or run specific handler """
-
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
-    if not hook_args:
-        output_hooks = []
-        for key, value in cobj.hooks_dict:
-            lifecycle = value["lifecycle"]
-            if isinstance(lifecycle, str):
-                lifecycle = [lifecycle]
-            output_hooks.append({"name": key, "description": value["description"], "lifecycle": lifecycle})
-        return output_hooks
-
-    hook_name = hook_args[0]  # hook is the first arg
-    hooks_names = cobj.hook_names
-    if hook_name not in hooks_names:
-        raise CLIError(f"unknown hook name '{hook_name}', Supported hooks '{hooks_names}")
-    status = cobj.state.status
-    if confirm:
-        pass
-    elif not status["Phase"] == STATE_PHASE_UP:
-        user_confirmation(f"You want to run a hook when the phase is not up '{status['Phase']}'. Are you sure ?")
-    elif not status["Status"] == STATE_STATUS_SUCCESS:
-        user_confirmation(f"You want to run a hook when the last status is not success '{status['Phase']}'. Are you sure ?")
-    run_hook(cobj, hook_args)
-    return None
-
-
-def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None, state_file=None):
-    """ status handler function, return status """
-
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
-    output_status = {}
-    if events:
-        output_status["events"] = cobj.state.events
-    else:
-        output_status = cobj.state.status
-    return output_status
 
 
 def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
@@ -117,12 +35,10 @@ def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_fi
     )
 
 
-def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None, validate=False):
+def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug config handler, dump the configuration file'''
 
     cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
-    if validate:
-        return None
     return cobj.config
 
 
@@ -136,7 +52,7 @@ def debug_state_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file
 def debug_result_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug result handler, return results after up'''
 
-    cobj, _ = init_config(config, False, working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
     return cobj.state.result_up
 
 
@@ -184,24 +100,58 @@ def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phas
             print(f"Error : {str(error)}")
 
 
+def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None, state_file=None):
+    ''' init handler '''
+
+    # cobj, _ = init_config(config, False, working_dir)
+    # TODO create an initial environment
+    _LOGGER.info("Init")
+
+
+def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, confirm=False, state_file=None):
+    """ hook handler function. list or run specific handler """
+
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    if not hook_args:
+        output_hooks = []
+        for key, value in cobj.get_hooks(format_list=False):
+            lifecycle = convert_to_list_if_need(value["lifecycle"])
+            output_hooks.append({"name": key, "description": value["description"], "lifecycle": lifecycle})
+        return output_hooks
+
+    hook_name = hook_args[0]  # hook is the first arg
+    hooks_names = cobj.get_hooks(format_list=True)
+    if hook_name not in hooks_names:
+        raise CLIError(f"unknown hook name '{hook_name}', Supported hooks '{hooks_names}")
+    status = cobj.state.status
+    if confirm:
+        pass
+    elif not status["Phase"] == STATE_PHASE_UP:
+        user_confirmation(f"You want to run a hook when the phase is not up '{status['Phase']}'. Are you sure ?")
+    elif not status["Status"] == STATE_STATUS_SUCCESS:
+        user_confirmation(f"You want to run a hook when the last status is not success '{status['Phase']}'. Are you sure ?")
+    run_hook(cobj, hook_args)
+    return None
+
+
+def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None, state_file=None):
+    """ status handler function, return status """
+
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    output_status = {}
+    if events:
+        output_status["events"] = cobj.state.events
+    else:
+        output_status = cobj.state.status
+    return output_status
+
+
 def down_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, working_dir=None, state_file=None):
     ''' down handler, Destroy a provisioned environment '''
 
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     cobj, _ = init_config(config, ConfigParser, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
-    cobj.state.transition_to_phase(STATE_PHASE_GOING_DOWN)
-    run_hook_lifecycle(cobj, LIFECYCLE_PRE_DOWN)
-    try:
-        de_provision(cmd, cobj)
-    except CLIError as error:
-        cobj.state.add_event(f"Errored during down phase: {str(error)}", STATE_STATUS_ERROR)
-        raise CLIError(error) from error
-    except Exception as error:
-        cobj.state.add_event(f"General error during down phase: {str(error)}", STATE_STATUS_ERROR)
-        raise
-
-    cobj.state.completed_phase(STATE_PHASE_DOWN, STATE_STATUS_SUCCESS, msg="")
-    run_hook_lifecycle(cobj, LIFECYCLE_POST_DOWN)
+    de_provision(cmd, cobj)
 
 
 def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, working_dir=None, state_file=None, destroy=False):
@@ -214,17 +164,33 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
         dir_change_working(cwd)
 
     cobj, _ = init_config(config, ConfigParser, remove_tmp=remove_tmp, working_dir=working_dir, state_file=state_file)
-    cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
-    # Run pre up life cycle
-    run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
-    # p = Progress()
-    try:
-        provision(cmd, cobj)
-    except CLIError as error:
-        cobj.state.add_event(f"Errored during up phase: {str(error)}", STATE_STATUS_ERROR)
-        raise
-    except Exception as error:
-        cobj.state.add_event(f"General error during up phase: {str(error)}", STATE_STATUS_ERROR)
-        raise
-    cobj.state.completed_phase(STATE_PHASE_UP, STATE_STATUS_SUCCESS, msg="")
-    run_hook_lifecycle(cobj, LIFECYCLE_POST_UP)
+    provision(cmd, cobj)
+
+
+def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, state_file=None, exit_on_error=False, down_strategy="success", upgrade_strategy="all"):
+    """ test handler function. Run all tests or specific ones """
+
+    working_dir = os.path.realpath(working_dir)
+    cobj = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)[0]
+    Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
+    dir_change_working(working_dir)
+    if not test_args:
+        test_args = cobj.tests
+    for test in test_args:
+        if test not in cobj.tests:
+            raise CLIError(f"unknown test name '{test}', Supported tests '{cobj.tests}")
+
+    results = run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_strategy, upgrade_strategy)
+    # print status to screen
+    one_test_failed = False
+    upgrade_failed = []
+    for upgrade in results:
+        for test_name in results[upgrade]:
+            test = results[upgrade][test_name]
+            if test["failed"]:
+                upgrade_failed.append(upgrade)
+                one_test_failed = True
+                _LOGGER.warning(test)
+    if one_test_failed:
+        raise CLIError(f"At-least on test failed in the following upgrades paths: {set(upgrade_failed)}")
+    return results

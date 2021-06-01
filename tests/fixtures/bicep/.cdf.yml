@@ -1,65 +1,156 @@
 ---
-name: "cdf_fixtures_bicep"
-resource_group: "cdf_fixtures_bicep"
-location: "eastus"
+name: "ssh_{{ store('postfix', random_string(5, 'lower')) }}"
+resource_group: "test_cdf_bicep_{{cdf.name}}"
+location: "eastus2"
+
+vars:
+  log_file: "{{cdf.tmp_dir}}/hook_log.txt"
+  lang: "{{ env['LANG'] | default('en') }}"
 
 params:
-  name: "cdf_key"
-  location: "eastus"
+  name: "{{cdf.name}}_key"
+  location: "{{cdf.location}}"
   key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrs/zJhwDvfjcmXiwlabkZMs7qjA0hl9c3RXBpWYQx2Ps/lhN/I043LsU1zAFPg9P5qaqzVjc73Zky2tZ8qVFKuHAUV8ccwLEwuvWmeqFTK5of6Dt/fuWRbCfpZDcq1nqp+v9bG+OhdNhOUMJFCbFWpHpAP95IOSo9YXeFLdegqMEm8zzgKojYE7RVrrejejmhZcoRMNZj4pxPk/FTqVoTR4C5lzZMBR0XLY/kzq4ay/LfAKyJ+EaNOeFOv/pCIw69DqBDqLiMUwHJLmGkw9azdT6FBXIQhhfeEilItQzfOnzTOh87Xvhv/z0fuhPynUbT6KWX0GO5oTRXE5Xf+TGR"
+  lang: "{{vars.lang}}"
+  extra: "{{vars.extra | default('default') }}"
+
+up: "{{ cdf.config_dir }}/ssh.bicep"
 
 hooks:
-  recursion:
-    description: "Print recursively till you reach the limit"
+  log:
+    description: "Log args to file"
+    ops:
+      - type: cmd
+        args: /bin/sh -c "echo {{ args | join(' ') }} >> {{ vars.log_file }}"
+        platform: ["linux", "darwin"]
+      - type: cmd
+        args: FIGURE THIS OUT IN PS
+        platform: ["windows"]
+  print_audit:
+    description: "Print args passed and append to file "
     ops:
       - type: print
-        args: Print from recursion
-      # - type: call
-      #   args: print
-      - type: cmd
-        args: /bin/sh -c "echo 1 >> /tmp/f.txt"
-
+        args: "-> {{ args[1:] | join(' ') }}"
+      - type: call
+        args: log
   pre-up:
     description: "Print before going up"
     lifecycle: "pre-up"
     ops:
       - name: print_pre_up
         type: print
-        args: Provisioning '{{cdf.name}}'
-
+        args: Provisioning '{{cdf.name}}' '{{cdf.resource_group}}'
+      - type: call
+        args: log
   all-up:
     description: "Print before going up again and also post"
     lifecycle: ["post-up", "pre-up"]
     ops:
       - type: print
-        args: Hook will run in  "post-up", "pre-up"
-
+        args: Hook will run in "post-up", "pre-up"
+      - type: call
+        args: log
   post-up:
     description: "Print after going up"
     lifecycle: "post-up"
     ops:
       - type: print
-        args: Post-up provisioned in {{cdf.resource_group}}
+        args: Hook will run post-up
+      - type: call
+        args: log
+  pre-down:
+    description: "Print before going down"
+    lifecycle: "pre-down"
+    ops:
+      - name: print_pre_down
+        type: print
+        args: De-provisioning '{{cdf.name}}' '{{cdf.resource_group}}'
+      - type: call
+        args: log
+  all-down:
+    description: "Print before going down again and also post"
+    lifecycle: ["post-down", "pre-down"]
+    ops:
+      - type: print
+        args: Hook will run in "post-down", "pre-down"
+      - type: call
+        args: log
+  post-down:
+    description: "Print after going down"
+    lifecycle: "post-down"
+    ops:
+      - type: print
+        args: Hook will run post-down
+      - type: call
+        args: log
+  az:
+    description: "Run Az CLI"
+    ops:
+      - name: show
+        args: resource show --id {{ result.resources[0]['id']}} --query 'name'
+      - type: print
+        args: "{{ hooks.az.show.stdout }}"
+  script:
+    description: "Run script"
+    ops:
+      - type: print
+        args: Running script {{cdf.config_dir}}/script.sh and saving data to {{cdf.tmp_dir}}/script.txt
+      - name: script_nix
+        type: script
+        args:
+          - "{{cdf.config_dir}}/script.sh"
+          - "{{cdf.tmp_dir}}/script.txt"
+        platform: ["linux", "darwin"]
+      - type: print
+        args: "{{ hooks.script.script_nix }}"
+        platform: ["linux", "darwin"]
+      - name: script_win
+        type: script
+        args:
+          - "{{cdf.config_dir}}/script.ps1"
+          - "{{cdf.tmp_dir}}/script.txt"
+        platform: ["windows"]
 
+  print_result:
+    description: "Print result output"
+    ops:
+      - type: print
+        args: "{{ result['resources'] }}}}"
+  cmd:
+    description: "cmd"
+    ops:
+      - name: A
+        type: cmd
+        args: echo "stdout"
+      - name: B
+        type: cmd
+        args: bash -c 'echo "stderr" 1>&2'
+      - name: C
+        type: print
+        args: print
+      - type: print
+        args: "A={{ hooks.cmd.A.stdout }}\nB={{ hooks.cmd.B.stderr }}\nC={{ hooks.cmd.C.stdout }}"
+  fail:
+    description: "Fail"
+    ops:
+      - type: cmd
+        args: exit 1
+  pre_test:
+    description: "Clean up before running test"
+    lifecycle: "pre-test"
+    ops:
+      - type: print
+        args: Cleaning up {{vars.log_file}}
+      - type: cmd
+        args: "rm -f {{vars.log_file}}"
+
+#### to do tests
 tests:
-  simple:
-    expect:
-      up:
-        fail: false
+  default:
+    file: "{{cdf.config_dir}}/tests/default/test.yml"
 
   expect_to_fail_and_fails:
-    description: "Expect the test to fail and tests fails"
-    params:
-      location: "eastus22"
-    expect:
-      up:
-        fail: true
+    file: "{{cdf.config_dir}}/tests/expect_to_fail_and_fails/test.yml"
 
   expect_to_fail_and_passes:
-    description: "Expect the test to fail but passes"
-    expect:
-      up:
-        fail: true
-
-  expect_with_hooks:
-    file: "{{cdf.config_dir}}/tests/expect_with_hooks/test.yml"
+    file: "{{cdf.config_dir}}/tests/expect_to_fail_and_passes/test.yml"

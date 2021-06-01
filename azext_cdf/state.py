@@ -7,34 +7,8 @@ from knack.util import CLIError
 from knack.log import get_logger
 from azext_cdf.utils import json_write_to_file, file_exists, file_read_content, json_load, file_http_write_json_content, file_http_read_json_content
 from azext_cdf.version import VERSION
-
-STATE_PHASE_UNKNOWN = "unknown"
-STATE_PHASE_GOING_UP = "transitioning_up"
-STATE_PHASE_UP = "UP"
-STATE_PHASE_TESTED = "tested"
-STATE_PHASE_TESTING = "testing"
-STATE_PHASE_DOWN = "down"
-STATE_PHASE_GOING_DOWN = "transitioning_down"
-STATE_PHASE_RUNNING_HOOK = "running_hook"
-
-STATE_STATUS_UNKNOWN = "unknown"
-STATE_STATUS_SUCCESS = "success"
-STATE_STATUS_ERROR = "errored"
-STATE_STATUS_FAILED = "failed"
-STATE_STATUS_PENDING = "pending"
-
-STATE_DEPLOYMENT_NAME = "name"
-STATE_RESOURCE_GROUP = "resource_group"
-STATE_PHASE = "phase"
-STATE_LASTUPDATE = "lastUpdate"
-STATE_STATUS = "status"
-STATE_EVENTS = "events"
-STATE_UP_RESULT = "result"
-STATE_UP_RESULT_OUTPUTS = "outputs"
-STATE_UP_RESULT_RESOURCES = "resources"
-STATE_HOOKS_RESULT = "hooks"
-STATE_VERSION = "version"
-STATE_STORE = "store"
+# pylint: disable=W0401,W0614
+from azext_cdf._def import *
 
 _LOGGER = get_logger(__name__)
 
@@ -97,13 +71,14 @@ class State():
 
     def _version_compare(self):
         ''' Check if state version '''
-        state_version = self.state_db["version"]
-        version_compare = semver.compare(state_version, VERSION)
-        if version_compare == -1:  # state is less then cli
+        state_version = semver.parse_version_info(self.state_db["version"])
+        cli_version = semver.parse_version_info(VERSION)
+
+        if state_version < cli_version:  # state is less then cli
             _LOGGER.warning("Your state file is out date: state version %s CDF version %s. Run `up -r` to rewrite state", state_version, VERSION)
-        elif version_compare == 1:  # state is more then cli
+        elif state_version > cli_version:  # state is more then cli
             _LOGGER.warning("Your CDF extension is outdate: state version %s CLI version %s. Upgrade extension", state_version, VERSION)
-        elif version_compare == 0:  # state is less then cli
+        elif state_version == cli_version:  # state is same as cli
             pass
 
     def _setup_hooks_reference(self):

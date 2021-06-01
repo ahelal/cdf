@@ -4,14 +4,12 @@
 
 CDF is an Azure CLI plugin that will make your life easier to develop, test, maintain, share units, and run IaC code in Azure. currently supports IaC `ARM`, `bicep` and `terraform`.
 
-## Install
+## Install (Dev version)
 
 * Install azure cli >= 2.20.0 + Python >= 3.7 
 * For the current time you need to build the extension
     * `make venv` create python virtual environment-
     * `make install` this will build the extension and install
-
-## Uninstall
 
 To uninstall the extension run `make uninstall`
 
@@ -168,16 +166,3 @@ TODO
 `az cdf --help`
 
 Check the examples https://github.com/ahelal/cdf-examples
-
-## TODO
-
-* Capture stdout, stderr in tests
-* save test results in state 
-* Lock during ops and hooks
-* Tests :)
-* change the filename from targetfile to deployment name
-* add jinja2 test to check dir, file, and filter for json/yaml
-* HTTP get filter in jinja2
-* Status should attempt to reconcile with ARM and update real status
-* Check if a deployment is running and connect instead of redeploying or deleting
-* Implement generic rest interface to run cdf by HTTP2

@@ -1,0 +1,36 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string"
+        },
+        "key": {
+            "type": "string"
+        },
+        "example": {
+            "type": "string",
+            "defaultValue": "helloworld-1"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/sshPublicKeys",
+            "apiVersion": "2020-06-01",
+            "name": "ssh_key",
+            "location": "[parameters('location')]",
+            "tags": {
+                "version": "old"
+            },
+            "properties": {
+                "publicKey": "[parameters('key')]"
+            }
+        }
+    ],
+    "outputs": {
+        "name": {
+            "type": "string",
+            "value": "[parameters('example')]"
+        }
+    }
+}

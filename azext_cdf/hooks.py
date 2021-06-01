@@ -2,13 +2,11 @@
 
 import os
 import stat
-import shlex
 
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import is_equal_or_in, file_read_content, file_write_content
-from azext_cdf.parser import CONFIG_HOOKS, SECOND_PHASE, RUNTIME_RUN_ONCE
-from azext_cdf.provisioner import run_command
+from azext_cdf.utils import is_equal_or_in, file_read_content, file_write_content, run_command, convert_to_shlex_arg
+from azext_cdf._def import CONFIG_HOOKS, SECOND_PHASE, RUNTIME_RUN_ONCE, CONFIG_TYPE, CONFIG_NAME, CONFIG_ARGS
 
 _LOGGER = get_logger(__name__)
 
@@ -33,11 +31,11 @@ def run_hook(cobj, hook_args):
     """
 
     cobj.interpolate_delayed_variable()
-    extra_vars = {"args": hook_args}
+    root_vars = {CONFIG_ARGS: hook_args}
     hook_name = hook_args[0]
     cobj.state.add_event(f"Running hook. hook args '{hook_args[1:]}'", hook=hook_name, flush=True)
     try:
-        if not _run_hook(cobj, hook_args, extra_vars=extra_vars):
+        if not _run_hook(cobj, hook_args, root_vars=root_vars):
             cobj.state.add_event("Skipping running hook, condition evaluted to false", hook=hook_name, flush=True)
             return
         cobj.state.add_event("Finished running hook", hook=hook_name, flush=True)
@@ -47,7 +45,7 @@ def run_hook(cobj, hook_args):
         raise
 
 
-def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
+def _run_hook(cobj, hook_args, recursion_n=1, root_vars=None):
     hook_name = hook_args[0]
     if recursion_n > RECURSION_LIMIT:
         raise CLIError(f"Call recursion limit reached {recursion_n - 1} hook: {hook_name}")
@@ -55,13 +53,13 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
     operation_num = 0
     hook = cobj.data[CONFIG_HOOKS][hook_name]
     _LOGGER.info("Running hook:%s, Args:%s", hook_name, hook_args)
-    if not _evaluate_condition(cobj, hook_name, hook, extra_vars):
+    if not _evaluate_condition(cobj, hook_name, hook, root_vars):
         _LOGGER.debug("Condition for hook %s evaluted to false", hook_name)
         return False
 
     for operation in hook["ops"]:
         operation_num += 1
-        ops_name = operation.get("name", operation.get("description", f"#{operation_num}"))
+        ops_name = operation.get(CONFIG_NAME, operation.get("description", f"#{operation_num}"))
         if is_equal_or_in("", operation["platform"]):
             pass  # all platforms
         elif is_equal_or_in(cobj.platform, operation["platform"]):
@@ -70,23 +68,23 @@ def _run_hook(cobj, hook_args, recursion_n=1, extra_vars=None):
             _LOGGER.info("Skipping due platform. My platform '%s' limiting platform '%s'", cobj.platform, operation["platform"])
             continue  # Skip
 
-        op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation["args"], extra_vars=extra_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
-        op_cwd = cobj.interpolate(phase=SECOND_PHASE, template=operation.get("cwd", None), extra_vars=extra_vars, context=f"az-cli cwd interpolation '{ops_name}' in hook '{hook_name}'")
+        op_args = cobj.interpolate(phase=SECOND_PHASE, template=operation[CONFIG_ARGS], root_vars=root_vars, context=f"az-cli op interpolation '{ops_name}' in hook '{hook_name}'")
+        op_cwd = cobj.interpolate(phase=SECOND_PHASE, template=operation.get("cwd", None), root_vars=root_vars, context=f"az-cli cwd interpolation '{ops_name}' in hook '{hook_name}'")
         interactive = operation.get("mode") == "interactive"
-        if operation["type"] == "az":
+        if operation[CONFIG_TYPE] == "az":
             stdout, stderr = _run_az(hook_name, ops_name, op_args, cwd=op_cwd)
-        elif operation["type"] == "cmd":
+        elif operation[CONFIG_TYPE] == "cmd":
             stdout, stderr = _run_cmd(hook_name, ops_name, op_args, interactive, cwd=op_cwd)
-        elif operation["type"] == "script":
+        elif operation[CONFIG_TYPE] == "script":
             stdout, stderr = _run_script(hook_name, ops_name, op_args, hook_args[1:], cobj, cwd=op_cwd)
-        elif operation["type"] == "print":
+        elif operation[CONFIG_TYPE] == "print":
             stdout, stderr = _run_print(hook_name, ops_name, op_args)
-        elif operation["type"] == "call":
-            _run_hook(cobj, [op_args], recursion_n + 1, extra_vars=extra_vars)
+        elif operation[CONFIG_TYPE] == "call":
+            _run_hook(cobj, [op_args], recursion_n + 1, root_vars=root_vars)
             stdout, stderr = "", ""
 
-        if operation.get("name", False):
-            cobj.state.set_hook_state(hook=hook_name, op_name=operation["name"], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
+        if operation.get(CONFIG_NAME, False):
+            cobj.state.set_hook_state(hook=hook_name, op_name=operation[CONFIG_NAME], op_data={"stdout": stdout, "stderr": stderr}, flush=True)
             cobj.update_hooks_result(cobj.state.result_hooks)
     return True
 
@@ -98,8 +96,7 @@ def _run_print(hook_name, ops_name, op_args):
 
 
 def _run_cmd(hook_name, ops_name, op_args, interactive=False, cwd=None):
-    if isinstance(op_args, str):
-        op_args = shlex.split(op_args)
+    op_args = convert_to_shlex_arg(op_args)
     try:
         return run_command(op_args[0], op_args[1:], interactive=interactive, cwd=cwd)
     except Exception as error:
@@ -107,8 +104,7 @@ def _run_cmd(hook_name, ops_name, op_args, interactive=False, cwd=None):
 
 
 def _run_az(hook_name, ops_name, op_args, cwd):
-    if isinstance(op_args, str):
-        op_args = shlex.split(op_args)
+    op_args = convert_to_shlex_arg(op_args)
     try:
         return run_command("az", op_args, cwd=cwd)
     except Exception as error:
@@ -116,8 +112,7 @@ def _run_az(hook_name, ops_name, op_args, cwd):
 
 
 def _run_script(hook_name, ops_name, op_args, hook_args, cobj, cwd):
-    if isinstance(op_args, str):
-        op_args = shlex.split(op_args)
+    op_args = convert_to_shlex_arg(op_args)
     filename = op_args[0]
     target_file = f"{cobj.tmp_dir}/{os.path.basename(filename)}"
     content = file_read_content(op_args[0])
@@ -128,7 +123,7 @@ def _run_script(hook_name, ops_name, op_args, hook_args, cobj, cwd):
     return _run_cmd(hook_name, ops_name, op_args, hook_args, cwd=cwd)
 
 
-def _evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
+def _evaluate_condition(cobj, hook_name, hook_object, root_vars=None):
     """
     Evalute a jinja2 expression and returns a boolean
 
@@ -136,12 +131,12 @@ def _evaluate_condition(cobj, hook_name, hook_object, extra_vars=None):
         cobj: Config object.
         hook_name: string hook name
         hook_object: The hook object being evaluated.
-        extra_vars: An optional dictionary of variables.
+        root_vars: An optional dictionary of variables.
 
     Returns:
         boolean if condition was evaluated correctly.
     """
-    run_if = cobj.interpolate(phase=SECOND_PHASE, template=hook_object["run_if"], extra_vars=extra_vars, context=f"condition evaluation for hook '{hook_name}'")
+    run_if = cobj.interpolate(phase=SECOND_PHASE, template=hook_object["run_if"], root_vars=root_vars, context=f"condition evaluation for hook '{hook_name}'")
     run_if = run_if.strip()
     if run_if.lower() in ["true", "1", "t", "y", "yes"]:
         return True
