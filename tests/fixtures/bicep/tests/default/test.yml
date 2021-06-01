@@ -42,7 +42,7 @@ expect:
           - "{{ include_file(vars.log_file).split('\n') | select('equalto', 'print_audit world') | list | length == 1 }}"
     - az:
         assert:
-          - "{{ result.resources[0]['id'] | lower in hooks.az.show.stdout| lower }}"
+          - "{{ cdf.name | lower in hooks.az.show.stdout| lower }}"
 # TODO
 # CMD
 # script
