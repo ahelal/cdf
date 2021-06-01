@@ -90,8 +90,7 @@ class FixtureBicep(unittest.TestCase):
     def test_2_cdf_hook_0_az(self):
         stdout, stderr = run_command("az", ["cdf", "hook", "az", "-w", self.work_dir])
         self.assertEqual(stderr, "")
-        json_stdout = json.loads(stdout)
-        self.assertEqual(json_stdout["id"].lower(), self.__class__.resource_id.lower())
+        self.assertEqual(stdout.replace('"', "").replace("\n", ""), os.path.basename(self.__class__.resource_id.lower()))
 
     def test_2_cdf_hook_1_script(self):
         stdout, stderr = run_command("az", ["cdf", "hook", "script", "-w", self.work_dir])
