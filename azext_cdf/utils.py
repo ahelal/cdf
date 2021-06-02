@@ -15,7 +15,7 @@ import yaml
 from knack.log import get_logger
 from knack.util import CLIError
 import azure.cli.core.commands.progress as progress
-from azext_cdf._def import CONFIG_STATE_FILEPATH, CONFIG_STATE_FILENAME
+from azext_cdf._def import CONFIG_STATE_FILEPATH
 # from azext_cdf.parser import ConfigParser
 
 _LOGGER = get_logger(__name__)
@@ -69,8 +69,7 @@ def init_config(config, config_parser, remove_tmp=False, working_dir=None, state
     override_config = {}
     if state_file:
         override_config = {
-            CONFIG_STATE_FILENAME: os.path.basename(state_file),
-            CONFIG_STATE_FILEPATH: f"file://{os.path.dirname(state_file)}",
+            CONFIG_STATE_FILEPATH: f"file://{state_file}",
         }
     return config_parser(config_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config), cwd
 

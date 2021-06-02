@@ -9,7 +9,7 @@ import string
 from mock import patch
 from knack.util import CLIError
 from azext_cdf.tester import run_test
-from azext_cdf.parser import ConfigParser, CONFIG_STATE_FILEPATH, CONFIG_STATE_FILENAME
+from azext_cdf.parser import ConfigParser, CONFIG_STATE_FILEPATH
 from azext_cdf._supporter_test import assert_state
 
 # pylint: disable=C0111
@@ -25,8 +25,7 @@ class TesterNoUpgrade(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         self.config["tmp_dir"] = self.tmpdir
         self.state_file = f"{self.tmpdir}/{''.join(random.sample(string.ascii_lowercase, 25))}.json"
-        self.config[CONFIG_STATE_FILENAME] = os.path.basename(self.state_file)
-        self.config[CONFIG_STATE_FILEPATH] = f"file://{os.path.dirname(self.state_file)}"
+        self.config[CONFIG_STATE_FILEPATH] = f"file://{self.state_file}"
         self.tests = ["default", "patch"]
         self.upgrades = ["fresh"]
 

@@ -11,7 +11,20 @@ from azext_cdf.parser import ConfigParser
 from azext_cdf.version import VERSION
 from azext_cdf._supporter_test import BasicParser, assert_state
 
+
+# class BasicParser(unittest.TestCase):
+#     def setUp(self):
+#         self.dirpath = tempfile.mkdtemp()
+#         self.config = {"name": "cdf_simple", "resource_group": "rg", "location": "loc"}
+#         self.config['tmp_dir'] = self.dirpath
+#         self.state_file = f"{self.dirpath}/{''.join(random.sample(string.ascii_lowercase, 25))}.json"
+#         self.override_config = {
+#             CONFIG_STATE_FILEPATH: f"file://{self.state_file}",
+#         }
+#     def tearDown(self):
+#         shutil.rmtree(self.dirpath)
 # pylint: disable=C0111
+
 class SimpleParser(BasicParser):
     @patch.object(ConfigParser, '_read_config')
     def test_min_default(self, mock_read_config):

@@ -7,8 +7,8 @@ from knack.util import CLIError
 from knack.log import get_logger
 from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg
 from azext_cdf.parser import ConfigParser
-from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME, CONFIG_STATE_FILENAME
-from azext_cdf._def import CONFIG_TYPE
+from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME
+from azext_cdf._def import CONFIG_TYPE, CONFIG_STATE_FILEPATH
 from azext_cdf.hooks import run_hook_lifecycle
 from azext_cdf.provisioner import de_provision, provision, run_command
 from azext_cdf.hooks import run_hook
@@ -33,7 +33,6 @@ def _run_de_provision(cmd, cobj, _, __):
 
 
 def _run_expect_tests(_, cobj, test_name, expect_obj):
-    # TODO simplify ugly
     errors = []
     # run commands
     expect_cmds = expect_obj.get("cmd")
@@ -158,7 +157,7 @@ def _manage_git_upgrade():
 
 
 def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix):
-    override_config = {CONFIG_STATE_FILENAME: f"test_{prefix}_{test_name}_state.json"}
+    override_config = {CONFIG_STATE_FILEPATH: "file://{{ cdf.tmp_dir }}/test_" + f"{prefix}_{test_name}_state.json"}
     test_cobj = ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
     upgrade_test = upgrade_config.get("from_expect")
     if upgrade_test is None:
@@ -172,6 +171,7 @@ def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix
         upgrade_location = upgrade_config.get("path")
         upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config)
         print(f"Provisioning initial state {prefix}_{upgrade_test}")
+        # TODO replace with _phase_cordinator to handle if provisioning fail
         _run_provision(cmd, upgrade_cobj, None, None)
     elif upgrade_config.get(CONFIG_TYPE) == "git":
         pass
@@ -191,8 +191,7 @@ def _upgrade_matrix(cobj, upgrade_strategy):
 # pylint: disable=W0613
 def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_strategy, upgrade_strategy):
     """ test handler function. Run all tests or specific ones """
-# test_cdf_arm_ssh_a_rrwvj_default_test_default_test
-# test_cdf_arm_ssh_a_rrwvj_default_test_default_test_default_test'
+
     results = {}
     cobj.state.transition_to_phase(STATE_PHASE_TESTING)
     for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy):

@@ -86,5 +86,4 @@ MAIN_SCHEMA = {
     Optional(CONFIG_UPGRADE, default=[]): _list_or_tuple_of(UPGRADE_SCHEMA),
     Optional(CONFIG_TESTS, default={}): TEST_SCHEMA,
     Optional(CONFIG_STATE_FILEPATH, default=CONFIG_STATE_FILEPATH_DEFAULT): str,
-    Optional(CONFIG_STATE_FILENAME, default=CONFIG_STATE_FILENAME_DEFAULT): str,
 }

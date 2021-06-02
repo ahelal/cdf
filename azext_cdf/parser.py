@@ -128,7 +128,6 @@ class ConfigParser:
     def _setup_test(self):
         if not self.test:
             return
-        # self.data[CONFIG_STATE_FILENAME] = f"{self.test}_test_state.json"  # override default state file
         self.data[CONFIG_NAME] = self.data[CONFIG_TESTS][self.test].get(CONFIG_NAME, f"{self.data[CONFIG_NAME]}_{self.test}_test")
         self.data[CONFIG_TESTS][self.test][CONFIG_DESCRIPTION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_DESCRIPTION, f"{self.data[CONFIG_NAME]} {self.test} test")
         self.data[CONFIG_LOCATION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_LOCATION, self.data[CONFIG_LOCATION])
@@ -163,9 +162,8 @@ class ConfigParser:
         if remove_tmp:  # remove and create tmp dir incase we will download some stuff for templates
             dir_remove(self.tmp_dir)
         dir_create(self.tmp_dir)
-        self.data[CONFIG_STATE_FILENAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILENAME], context=f"key {CONFIG_STATE_FILENAME}")
         self.data[CONFIG_STATE_FILEPATH] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILEPATH], context=f"key {CONFIG_STATE_FILEPATH}")
-        self.state = State(os.path.join(self.data[CONFIG_STATE_FILEPATH], self.data[CONFIG_STATE_FILENAME]))  # initialize state
+        self.state = State(self.data[CONFIG_STATE_FILEPATH])  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get  # setup store functions in jinja2
 
         self.first_phase_vars[CONFIG_CDF][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
