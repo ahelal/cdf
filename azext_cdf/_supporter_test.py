@@ -4,11 +4,23 @@ import unittest
 import tempfile
 import shutil
 import os
+import json
 import random
 import string
 from azext_cdf._def import CONFIG_STATE_FILEPATH, CONFIG_STATE_FILENAME
 
 # pylint: disable=C0111
+
+def assert_state(self, state_path, content=None):
+    self.assertTrue(os.path.exists(state_path))
+    if not content:
+        return
+    with open(state_path) as json_file:
+        data = json.load(json_file)
+        for key, assert_value in content.items():
+            self.assertEqual(data[key], assert_value)
+
+
 class BasicParser(unittest.TestCase):
     def setUp(self):
         self.dirpath = tempfile.mkdtemp()

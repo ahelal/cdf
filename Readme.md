@@ -58,37 +58,56 @@ vars:
 # optional, object, templatable defaults to {}.
 # See hooks section
 hooks:
-    hello:
-        type: print
-        args: 'Hello'
+  helloworld:
+    description: "Optional description of hook"
+    ops:  # list of Operations
+      - type: print
+        args: Running creating {{cdf.name}} in {{cdf.resource_group}}
 ```
 
 ### Hooks 
 
-TODO
+One useful functionality of CDF is hooks, You can create ad-hoc operation and call them manually or part of the lifecycle.
+The ah-hoc commands are harder to incorporated part of your normal provisioning sequence. 
+Some examples 
+* ssh into a VM on demand
+* Taking a snapshot now
+* Downloading logs
 
-#### Hook types
+hooks are defined in the `.cdf.yml` under `hooks` then the hook name.
 
-TODO
+```yaml
+hooks:
+  hook1:
+      ...
+  hook2:
+      ...
+  hook3:
+      ...
+```
 
-##### az
-TODO
+Anatomy of hooks
 
-##### cmd
-TODO
+```yaml
+hooks:
+  helloworld:
+    description: "Optional description of hook"  # Optional, string, not templatable. default to ""
+    ops:  
+      # At least one op is required
+      - name: opname # Optional, string, not templatable. if defined will store the output of the op operation and can be referenced later
+        type: print # Optional, string, not templatable, defaults to `az` check type section
+        args: Running creating {{cdf.name}} in {{cdf.resource_group}} # required, string, templatable. arguments for the op, each type handles arguments differently
+        platform: 
+        mode: wait # Optional, string, not templatable, defaults to `wait`, supported wait, interactive
+        cwd: "/" # optional, string, templatable, defaults to current working directory
+        platform: "linux" # Optional, string or list, not templatable, which platform this op can run
+    lifecycle: ""  # Optional, string or list, not templatable. default to "", supports check lifecycle section
+    run_if: true # Optional, string, templatable. default to "true", must be interpolated to string boolean i.e. "true", "TRUE", "0", "no", ..., support 
+```
 
-##### script
-TODO
+You can run hooks by issuing `az cdf hook <HOOK_NAME>`. 
 
-##### print
-TODO
-
-##### call
-TODO
-
-#### Hooks args
-
-You can also pass extra arguments to your hook 
+if you want to pass argument to your hook you can use `{{args}}` variable.
 
 ```yaml
 hooks:
@@ -103,6 +122,25 @@ az cdf hook info option1 option2
 All ['info', 'option1', 'option2']
 Hook=info First=option1 Second=option2
 ```
+
+#### Hook types
+
+##### az
+
+az 
+
+##### cmd
+TODO
+
+##### script
+TODO
+
+##### print
+TODO
+
+##### call
+TODO
+
 
 #### Life cycle 
 
@@ -159,7 +197,8 @@ TODO
 
 ## Credentials in state
 
-TODO
+By default CDF does not store any credentials in cdf state file, but output, variables, errors, and parameters can be stored in state file. Also deployments, tmp files can be stored in `cdf.tmp_dir`
+To avoid any potential credentials leakage you should git ignore the entire `cdf.tmp_dir`.
 
 ## Help 
 

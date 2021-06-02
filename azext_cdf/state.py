@@ -129,11 +129,9 @@ class State():
     @staticmethod
     def _timestamp():
         ''' Current timestamp '''
-
-        # utc='%H:%M:%S %d/%m/%Y-%Z'
-        # return datetime.utcnow().strftime(utc)
-        local = "%H:%M:%S %d/%m/%Y"
-        return datetime.now().strftime(local)
+        # str_time ='%H:%M:%S %d/%m/%Y-%Z'  # utc
+        str_time = "%H:%M:%S %d/%m/%Y"  # local time
+        return datetime.now().strftime(str_time)
 
     def transition_to_phase(self, phase):
         """An alias to add event to write state transition"""

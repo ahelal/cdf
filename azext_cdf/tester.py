@@ -34,13 +34,14 @@ def _run_de_provision(cmd, cobj, _, __):
 def _run_expect_tests(_, cobj, test_name, expect_obj):
     # TODO simplify ugly
     errors = []
+    # run commands
     expect_cmds = expect_obj.get("cmd")
     for expect_cmd in convert_to_list_if_need(expect_cmds):
         try:
             _expect_cmd_exec(cobj, test_name, expect_cmd)
         except CLIError as error:
             errors.append(f"expect cmd failed '{expect_cmd}'. Error: '{error}'")
-
+    # run asserts
     asserts = expect_obj.get("assert")
     for expect_assert in convert_to_list_if_need(asserts):
         try:

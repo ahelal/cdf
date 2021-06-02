@@ -45,10 +45,14 @@ def run_hook(cobj, hook_args):
         raise
 
 
-def _run_hook(cobj, hook_args, recursion_n=1, root_vars=None):
-    hook_name = hook_args[0]
+def _recursion_limit(recursion_n, hook_name):
     if recursion_n > RECURSION_LIMIT:
         raise CLIError(f"Call recursion limit reached {recursion_n - 1} hook: {hook_name}")
+
+
+def _run_hook(cobj, hook_args, recursion_n=1, root_vars=None):
+    hook_name = hook_args[0]
+    _recursion_limit(recursion_n, hook_name)
 
     operation_num = 0
     hook = cobj.data[CONFIG_HOOKS][hook_name]

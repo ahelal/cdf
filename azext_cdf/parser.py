@@ -252,7 +252,7 @@ class ConfigParser:
             # lazy variable resolve
             for key, value in self.data[CONFIG_VARS].items():
                 try:
-                    self.first_phase_vars[CONFIG_VARS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config '{key}':'{value}'", raw_undefined_error=True)
+                    self.first_phase_vars[CONFIG_VARS][key] = self.interpolate(FIRST_PHASE, value, f"variables in config '{key}':'{value}'")
                 except UndefinedError as error:
                     if "result" in str(error):
                         self._delayed_vars.append(key)
@@ -302,32 +302,29 @@ class ConfigParser:
 
         self.interpolate_delayed_variable()
         if CONFIG_PARAMS in self.data:
-            # interpolate(self, phase, template, context=None, extra_vars=None, root_vars=None, raw_undefined_error=False):
             self.data[CONFIG_PARAMS] = self.interpolate(FIRST_PHASE, self.data[CONFIG_PARAMS], context="pre up interpolation")
 
-    def interpolate(self, phase, template, context=None, extra_vars=None, root_vars=None, raw_undefined_error=False):
+    def interpolate(self, phase, template, context=None, extra_vars=None, root_vars=None):
         ''' Interpolate a string template '''
 
         if template is None:
             return None
-        if phase == FIRST_PHASE:
-            variables = self.first_phase_vars
-        elif phase == SECOND_PHASE:
+        # variables
+        variables = self.first_phase_vars  # setup first phase anyway
+        if phase == SECOND_PHASE:
             variables = {**self.second_phase_vars, **self.first_phase_vars}
-
         if extra_vars:
             variables[CONFIG_VARS] = {**variables[CONFIG_VARS], **extra_vars}
         if root_vars:
             variables = {**root_vars, **variables}
+
+        error_context = f"in phase '{phase}'"
         if context:
             error_context = f"in phase: '{phase}'', Context: '{context}'"
-        else:
-            error_context = f"in phase '{phase}'"
+
         try:
             return self._raw_interpolate_object(template, variables)
         except UndefinedError as error:
-            if raw_undefined_error:
-                raise CLIError(f"undefined variable {str(error)}") from error
             raise CLIError(f"expression interpolation error. {error_context}, undefined variable: {str(error)}") from error
         except TemplateSyntaxError as error:
             raise CLIError(f"expression interpolation error. {error_context}, template syntax: {str(error)}") from error
