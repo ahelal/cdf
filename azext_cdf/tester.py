@@ -170,7 +170,7 @@ def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix
 
     if upgrade_config.get(CONFIG_TYPE) == "local":
         upgrade_location = upgrade_config.get("path")
-        upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config) 
+        upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config)
         print(f"Provisioning initial state {prefix}_{upgrade_test}")
         _run_provision(cmd, upgrade_cobj, None, None)
     elif upgrade_config.get(CONFIG_TYPE) == "git":
