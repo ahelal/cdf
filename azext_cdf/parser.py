@@ -3,15 +3,15 @@
 import os
 import platform
 import yaml
-import schema
-from schema import Schema, And, Or, Use, Optional, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
+from schema import Schema, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 
 from knack.util import CLIError
 from jinja2 import Environment, BaseLoader, StrictUndefined, pass_context, Template
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError, TemplateRuntimeError
 from azext_cdf.version import VERSION
-from azext_cdf.utils import dir_create, dir_remove, is_part_of, real_dirname, random_string, convert_to_list_if_need, dir_change_working
+from azext_cdf.utils import dir_create, dir_remove, real_dirname, random_string, convert_to_list_if_need, dir_change_working
 from azext_cdf.state import State
+from azext_cdf.parser_schema import MAIN_SCHEMA
 # pylint: disable=W0401,W0614
 from azext_cdf._def import *
 
@@ -35,88 +35,9 @@ def _template_file(ctx, name):
     return data
 
 
-def _list_or_tuple_of(sub_schema):
-    return schema.Or((sub_schema,), [sub_schema])
-
-
-# https://github.com/keleshev/schema
-hooks_schema = {
-    str: {
-        "ops": [
-            {
-                Optional(CONFIG_NAME): str,
-                Optional(CONFIG_DESCRIPTION, default=""): str,
-                Optional(CONFIG_TYPE, default="az"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_TYPES),
-                Optional("platform", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_PLATFORM)),
-                Optional("mode", default='wait'): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_OPS_MODE),
-                Optional("cwd"): str,
-                CONFIG_ARGS: Or(str, list),
-            }
-        ],
-        Optional("lifecycle", default=""): Or(And(str, Use(str.lower), (And(list))), lambda s: is_part_of(s, CONFIG_SUPPORTED_LIFECYCLE)),
-        Optional(CONFIG_DESCRIPTION, default=""): str,
-        Optional("run_if", default="true"): str,
-    }
-}
-expect_schema = {
-    Optional(CONFIG_EXPECT_FAIL, default=False): bool,
-    Optional(CONFIG_EXPECT_ASSERT): Or(str, list),
-    Optional(CONFIG_EXPECT_CMD): Or(str, list),
-    Optional(CONFIG_EXPECT_ARGS): Or(str, list),
-}
-upgrade_schema = {
-    CONFIG_NAME: And(str, Use(str.lower), lambda s: s != "fresh"),
-    Optional(CONFIG_TYPE, default="local"): And(str, lambda s: s in CONFIG_SUPPORTED_UPGRADE_TYPES),
-    Optional("path", default="/"): str,
-    Optional("from_expect", default="default"): Or(str, list),
-    Optional("git_source"): (str),
-    Optional("git_version"): str,
-    Optional("git_key"): (str),
-    Optional("git_args"): (str),
-}
-test_schema = {
-    str: {
-        Optional(CONFIG_FILE): str,
-        Optional(CONFIG_NAME): And(str, len),
-        Optional(CONFIG_DESCRIPTION, default=""): str,
-        Optional(CONFIG_RG): And(str, len),
-        Optional(CONFIG_LOCATION): And(str, len),
-        Optional(CONFIG_RG_MANAGED, default=True): bool,
-        Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
-        Optional(CONFIG_UP): And(str, len),
-        # Optional('vars_file', default=[]): Or(str,list),
-        Optional(CONFIG_VARS): dict,
-        Optional(CONFIG_PARAMS): dict,
-        Optional(CONFIG_EXPECT): {
-            Optional(Or("up", "down")): expect_schema,
-            Optional(CONFIG_HOOKS): _list_or_tuple_of({str: expect_schema}),
-        }
-    }
-}
-schema_def = {
-    CONFIG_NAME: And(str, len),
-    CONFIG_RG: And(str, len),
-    CONFIG_LOCATION: And(str, len),
-    Optional(CONFIG_SCOPE, default="resource_group"): And(str, len),
-    Optional(CONFIG_RG_MANAGED, default=True): bool,
-    Optional(CONFIG_PROVISIONER, default="bicep"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
-    Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
-    Optional(CONFIG_UP, default=""): str,
-    Optional(CONFIG_TMP, default="{{cdf.config_dir}}/.cdf_tmp"): And(str, len),
-    # Optional('vars_file', default=[]): Or(str,list),
-    Optional(CONFIG_VARS, default={}): dict,
-    Optional(CONFIG_PARAMS, default={}): dict,
-    Optional(CONFIG_HOOKS, default={}): hooks_schema,
-    Optional(CONFIG_UPGRADE, default=[]): _list_or_tuple_of(upgrade_schema),
-    Optional(CONFIG_TESTS, default={}): test_schema,
-    Optional(CONFIG_STATE_FILEPATH, default=CONFIG_STATE_FILEPATH_DEFAULT): str,
-    Optional(CONFIG_STATE_FILENAME, default=CONFIG_STATE_FILENAME_DEFAULT): str,
-}
-
-
 class ConfigParser:
     '''  CDF yaml config parser class '''
-    def __init__(self, cdf_yml_filepath, remove_tmp=False, test=None, working_dir=None, override_config=None):
+    def __init__(self, config_filepath, remove_tmp=False, test=None, working_dir=None, override_config=None):
         self.data = {}
         self.state = {}
         self.first_phase_vars = {}
@@ -127,30 +48,30 @@ class ConfigParser:
         self.cwd = os.getcwd()
         if working_dir:
             dir_change_working(working_dir)
-        self.data = self._read_config(cdf_yml_filepath)
-        if override_config:
-            self.data = {**self.data, **override_config}
-        self._validate_conf(cdf_yml_filepath)
+        self.data = self._read_config(config_filepath)
+        self._validate_conf(config_filepath)
         self._setup_jinja2()
-        self._setup_pre_phase_interpolation(cdf_yml_filepath)  # pre phase
+        self._setup_pre_phase_interpolation(config_filepath)  # pre phase
         self._setup_load_file_references()
         self._setup_test()
+        if override_config:
+            self.data = {**self.data, **override_config}
         self._setup_first_phase_interpolation(remove_tmp)  # First phase
         self._setup_second_phase_variables()  # Second phase
         self.update_hooks_result(self.state.result_hooks)
         dir_change_working(self.cwd)
 
-    def _validate_conf(self, cdf_yml_filepath):
+    def _validate_conf(self, config_filepath):
         try:
-            schema_obj = Schema(schema_def)
+            schema_obj = Schema(MAIN_SCHEMA)
             self.data = schema_obj.validate(self.data)
             self._extra_validate()
         except SchemaWrongKeyError as error:
-            raise CLIError(f"config schema error 'SchemaWrongKeyError' in '{cdf_yml_filepath}' an unexpected key is detected: {str(error)}") from error
+            raise CLIError(f"config schema error 'SchemaWrongKeyError' in '{config_filepath}' an unexpected key is detected: {str(error)}") from error
         except SchemaMissingKeyError as error:
-            raise CLIError(f"config  schema error 'SchemaMissingKeyError' in '{cdf_yml_filepath}' a mandatory key is not found: {str(error)}") from error
+            raise CLIError(f"config  schema error 'SchemaMissingKeyError' in '{config_filepath}' a mandatory key is not found: {str(error)}") from error
         except SchemaError as error:
-            raise CLIError(f"config schema error 'SchemaError' in '{cdf_yml_filepath}' a general schema violation: {str(error)}") from error
+            raise CLIError(f"config schema error 'SchemaError' in '{config_filepath}' a general schema violation: {str(error)}") from error
 
     def _extra_validate(self):
         ''' validation not covered by schema '''
@@ -222,11 +143,11 @@ class ConfigParser:
             self.data[CONFIG_RG] = f"{self.data[CONFIG_RG]}_{self.test}_test"
         # Don't do anything use cdf self.data[CONFIG_RG]
 
-    def _setup_pre_phase_interpolation(self, cdf_yml_filepath):
+    def _setup_pre_phase_interpolation(self, config_filepath):
         self.first_phase_vars = {
             CONFIG_CDF: {
                 "version": VERSION,
-                "config_dir": real_dirname(cdf_yml_filepath),
+                "config_dir": real_dirname(config_filepath),
                 "platform": platform.system().lower(),
             },
             RUNTIME_ENV_KEY: os.environ,

@@ -1,6 +1,6 @@
 ---
-name: "ssh_{{ store('postfix', random_string(5, 'lower')) }}"
-resource_group: "test_cdf_bicep_{{cdf.name}}"
+name: "ssh_a_{{ store('postfix', random_string(5, 'lower')) }}"
+resource_group: "cdf_arm_{{cdf.name}}"
 location: "eastus2"
 
 params:
@@ -20,8 +20,7 @@ hooks:
 upgrade:
   - name: previous_version
     type: local
-    path: ../arm-1
-    git_version: "{{cdf.resource_group}}"
+    path: "{{ cdf.config_dir }}/../v1"
     from_expect: ["default"]
 
   # - name: last_tag
@@ -40,4 +39,4 @@ tests:
       location: "sss"
     expect:
       up:
-        fail: false
+        fail: true

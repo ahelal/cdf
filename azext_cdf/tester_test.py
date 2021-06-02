@@ -42,7 +42,7 @@ class TesterNoUpgrade(unittest.TestCase):
         self.config["name"] = 'test_simple_down_strategy_always'
         _read_config.return_value = self.config
         cobj = ConfigParser("/a/b/.cdf.yml")
-        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(), 
+        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(),
                           down_strategy="always", upgrade_strategy="all")
 
         assert_run_count(self, {_run_hook: 0, _run_provision: 2, _run_de_provision: 2, _run_expect_tests: 4})
@@ -68,7 +68,7 @@ class TesterNoUpgrade(unittest.TestCase):
         self.config["name"] = 'test_simple_down_strategy_success'
         _read_config.return_value = self.config
         cobj = ConfigParser("/a/b/.cdf.yml")
-        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(), 
+        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(),
                           down_strategy="success", upgrade_strategy="all")
 
         assert_run_count(self, {_run_hook: 0, _run_provision: 2, _run_de_provision: 2, _run_expect_tests: 4})
@@ -94,7 +94,7 @@ class TesterNoUpgrade(unittest.TestCase):
         self.config["name"] = 'test_simple_down_strategy_never'
         _read_config.return_value = self.config
         cobj = ConfigParser("/a/b/.cdf.yml")
-        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(), 
+        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(),
                           down_strategy="never", upgrade_strategy="all")
 
         assert_run_count(self, {_run_hook: 0, _run_provision: 2, _run_de_provision: 0, _run_expect_tests: 2})
@@ -180,7 +180,7 @@ class TesterNoUpgrade(unittest.TestCase):
         self.config["name"] = 'test_simple_upgrade_strategy_only_upgrade'
         _read_config.return_value = self.config
         cobj = ConfigParser("/a/b/.cdf.yml")
-        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(), 
+        results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(),
                           down_strategy="always", upgrade_strategy="upgrade")
 
         assert_run_count(self, {_run_hook: 0, _run_provision: 0, _run_de_provision: 0, _run_expect_tests: 0})
@@ -214,7 +214,7 @@ class TesterNoUpgrade(unittest.TestCase):
 #         self.config["name"] = 'test_simple_upgrade_strategy_only_upgrade'
 #         _read_config.return_value = self.config
 #         cobj = ConfigParser("/a/b/.cdf.yml")
-#         results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(), 
+#         results = run_test(None, cobj=cobj, config="/a/b/.cdf.yml", exit_on_error=False, test_args=["default", "patch"], working_dir=os.getcwd(),
 #                           down_strategy="always", upgrade_strategy="upgrade")
 
 #         assert_run_count(self, {_run_hook: 0, _run_provision: 2, _run_de_provision: 2, _run_expect_tests: 4})
@@ -239,8 +239,8 @@ if __name__ == '__main__':
     unittest.main()
 
 
-# TODO Write tests for 
-    # _run_single_test
-    # _expect_cmd_exec
-    # _expect_assert_exec
-    # _phase_cordinator
+# TODO Write tests for
+# _run_single_test
+# _expect_cmd_exec
+# _expect_assert_exec
+# _phase_cordinator

@@ -1,9 +1,11 @@
 ---
 name: "ssh_t_{{ store('postfix', random_string(5, 'lower')) }}"
 resource_group: "cdf_terraform_{{cdf.name}}"
-location: "eastus2"
-
+location: "eastus"
 provisioner: "terraform"
+vars:
+  resource_group_tags:
+    terraform: v1
 
 params:
   name: "{{ cdf.name }}_key"

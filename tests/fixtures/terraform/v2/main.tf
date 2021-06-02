@@ -17,11 +17,3 @@ output "hello" {
 output "name" {
   value = azurerm_ssh_public_key.ssh.name
 }
-
-/* terraform {
-  backend "azurerm" {
-    resource_group_name  = "DefaultResourceGroup-EUS"
-    storage_account_name = "daprstoredoma"
-    container_name       = "tfstate"
-  }
-} */

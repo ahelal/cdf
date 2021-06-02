@@ -72,7 +72,7 @@ def init_config(config, config_parser, remove_tmp=False, working_dir=None, state
             CONFIG_STATE_FILENAME: os.path.basename(state_file),
             CONFIG_STATE_FILEPATH: f"file://{os.path.dirname(state_file)}",
         }
-    return config_parser(cdf_yml_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config), cwd
+    return config_parser(config_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config), cwd
 
 
 def real_dirname(dir_path):

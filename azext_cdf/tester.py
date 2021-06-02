@@ -8,6 +8,7 @@ from knack.log import get_logger
 from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg
 from azext_cdf.parser import ConfigParser
 from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME, CONFIG_STATE_FILENAME
+from azext_cdf._def import CONFIG_TYPE
 from azext_cdf.hooks import run_hook_lifecycle
 from azext_cdf.provisioner import de_provision, provision, run_command
 from azext_cdf.hooks import run_hook
@@ -148,7 +149,6 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
         _phase_cordinator(cmd, test_cobj, i["func"], i[CONFIG_NAME], expect_obj, result, test_name=test_name, exit_on_error=exit_on_error, down_strategy=down_strategy, fail=i["fail_override"])
         if result["failed"]:
             return
-
     # Run post test life cycle
     run_hook_lifecycle(test_cobj, LIFECYCLE_POST_TEST)
 
@@ -157,16 +157,23 @@ def _manage_git_upgrade():
     pass
 
 
-def _prepera_upgrade(upgrade_path, config, working_dir, test_name, prefix):
+def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix):
     override_config = {CONFIG_STATE_FILENAME: f"test_{prefix}_{test_name}_state.json"}
-    if upgrade_path.get("from_expect") is None:
-        return ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
+    test_cobj = ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
+    upgrade_test = upgrade_config.get("from_expect")
+    if upgrade_test is None:
+        return test_cobj
     # Need to provision
-    test_cobj = None
-    if upgrade_path.get("type") == "local":
-        # change working dir, override tmp file
-        test_cobj = ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
-    elif upgrade_path.get("type") == "git":
+    override_config["name"] = test_cobj.name
+    override_config["resource_group"] = test_cobj.resource_group_name
+    override_config["tmp_dir"] = test_cobj.tmp_dir
+
+    if upgrade_config.get(CONFIG_TYPE) == "local":
+        upgrade_location = upgrade_config.get("path")
+        upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config) 
+        print(f"Provisioning initial state {prefix}_{upgrade_test}")
+        _run_provision(cmd, upgrade_cobj, None, None)
+    elif upgrade_config.get(CONFIG_TYPE) == "git":
         pass
     # change back working dir
     return test_cobj
@@ -184,7 +191,8 @@ def _upgrade_matrix(cobj, upgrade_strategy):
 # pylint: disable=W0613
 def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_strategy, upgrade_strategy):
     """ test handler function. Run all tests or specific ones """
-
+# test_cdf_arm_ssh_a_rrwvj_default_test_default_test
+# test_cdf_arm_ssh_a_rrwvj_default_test_default_test_default_test'
     results = {}
     cobj.state.transition_to_phase(STATE_PHASE_TESTING)
     for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy):
@@ -197,7 +205,8 @@ def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_stra
         for test_name in test_args:
             print(f"Running test: '{test_name}' upgrade path: {upgrade_title}")
             results[prefix][test_name] = {"failed": False}
-            test_cobj = _prepera_upgrade(upgrade_obj, config, working_dir, test_name, prefix)  # not sure about logic
+            test_cobj = _prepera_upgrade(cmd, upgrade_obj, config, working_dir, test_name, prefix)  # not sure about logic
+            print("Running test")
             _run_single_test(cmd, test_cobj, results[prefix][test_name], test_name, exit_on_error, down_strategy)
         # TODO write tests to state
     cobj.state.transition_to_phase(STATE_PHASE_TESTED)

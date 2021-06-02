@@ -13,7 +13,6 @@ from azext_cdf._def import CONFIG_PARAMS, LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, L
 from azext_cdf._def import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
 from azext_cdf.hooks import run_hook_lifecycle
 from azext_cdf.utils import run_command, find_the_right_file, find_the_right_dir, json_write_to_file
-# TODO STATE_PHASE_TESTED, STATE_PHASE_TESTING,
 from azext_cdf.state import STATE_STATUS_SUCCESS, STATE_STATUS_ERROR
 
 _LOGGER = get_logger(__name__)
@@ -43,12 +42,15 @@ def _empty_deployment(cmd, cobj):
 
 def provision_rg_if_needed(cmd, cobj):
     ''' Create resource group if needed '''
-    if cobj.managed_resource:
-        create_resource_group(cmd, rg_name=cobj.resource_group_name, location=cobj.location)
+    if cobj.managed_resource and not _resource_group_exists(cmd, cobj.resource_group_name):
+        resource_group_tags = cobj.first_phase_vars["vars"].get("resource_group_tags", False)
+        tags = {"managed_by": "CDF", "deployment": cobj.name}
+        if isinstance(resource_group_tags, dict):
+            tags = resource_group_tags
+        create_resource_group(cmd, rg_name=cobj.resource_group_name, location=cobj.location, tags=tags)
 
 
 def _resource_group_exists(cmd, resource_group):
-    # try:
     try:
         show_resource(cmd, resource_ids=[f"/subscriptions/{get_subscription_id(cmd.cli_ctx)}/resourceGroups/{resource_group}"])
     except ResourceNotFoundError:

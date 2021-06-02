@@ -1,11 +1,15 @@
 ---
-name: "ssh_{{ store('postfix', random_string(5, 'lower')) }}"
-resource_group: "test_cdf_arm_{{cdf.name}}"
-location: "eastus2"
+name: "ssh_a_{{ store('postfix', random_string(5, 'lower')) }}"
+resource_group: "cdf_arm_{{cdf.name}}"
+location: "eastus"
 
 params:
   location: "{{cdf.location}}"
   key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrs/zJhwDvfjcmXiwlabkZMs7qjA0hl9c3RXBpWYQx2Ps/lhN/I043LsU1zAFPg9P5qaqzVjc73Zky2tZ8qVFKuHAUV8ccwLEwuvWmeqFTK5of6Dt/fuWRbCfpZDcq1nqp+v9bG+OhdNhOUMJFCbFWpHpAP95IOSo9YXeFLdegqMEm8zzgKojYE7RVrrejejmhZcoRMNZj4pxPk/FTqVoTR4C5lzZMBR0XLY/kzq4ay/LfAKyJ+EaNOeFOv/pCIw69DqBDqLiMUwHJLmGkw9azdT6FBXIQhhfeEilItQzfOnzTOh87Xvhv/z0fuhPynUbT6KWX0GO5oTRXE5Xf+TGR"
+
+vars:
+  resource_group_tags:
+    arm: v1
 
 provisioner: "arm"
 up: "{{ cdf.config_dir }}/ssh.json"
