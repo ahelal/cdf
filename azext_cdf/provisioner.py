@@ -9,6 +9,7 @@ from azure.cli.command_modules.resource.custom import build_bicep_file
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, delete_resource, show_resource
 from azure.cli.core.commands.client_factory import get_subscription_id
 from azure.core.exceptions import ResourceNotFoundError
+from msrestazure.azure_exceptions import CloudError
 from azext_cdf._def import CONFIG_PARAMS, LIFECYCLE_PRE_UP, LIFECYCLE_POST_UP, LIFECYCLE_PRE_DOWN, LIFECYCLE_POST_DOWN
 from azext_cdf._def import STATE_PHASE_GOING_UP, STATE_PHASE_UP, STATE_PHASE_DOWN, STATE_PHASE_GOING_DOWN
 from azext_cdf.hooks import run_hook_lifecycle
@@ -42,6 +43,8 @@ def _empty_deployment(cmd, cobj):
 
 def provision_rg_if_needed(cmd, cobj):
     ''' Create resource group if needed '''
+    print("XXXXXXX", cobj.managed_resource,)
+    print("XXXXX",  _resource_group_exists(cmd, cobj.resource_group_name))
     if cobj.managed_resource and not _resource_group_exists(cmd, cobj.resource_group_name):
         resource_group_tags = cobj.first_phase_vars["vars"].get("resource_group_tags", False)
         tags = {"managed_by": "CDF", "deployment": cobj.name}
@@ -55,6 +58,10 @@ def _resource_group_exists(cmd, resource_group):
         show_resource(cmd, resource_ids=[f"/subscriptions/{get_subscription_id(cmd.cli_ctx)}/resourceGroups/{resource_group}"])
     except ResourceNotFoundError:
         return False
+    except CloudError as error:
+        if "ResourceGroupNotFound" in str(error):
+            return False
+        raise error
     return True
 
 
