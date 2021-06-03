@@ -46,7 +46,10 @@ test-unit:
 test-integration:
 	pytest -v tests --color=yes --code-highlight=yes -s
 	@echo "running expect default test"
-	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default 
+	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default
+
+test-clean:
+	find . -type d -iname foo -delete
 
 clean:
 	rm -rf build

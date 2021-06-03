@@ -23,6 +23,14 @@ upgrade:
     path: "{{ cdf.config_dir }}/../v1"
     from_expect: ["default"]
 
+  # - name: previous_hash
+  #   type: git
+  #   # path: "{{ cdf.config_dir }}/../v1"
+  #   from_expect: ["default"]
+  #   git:
+  #     repo: "https://aaaaaa"
+  #     branch: master
+  #     tag: ~3
   # - name: last_tag
   #   type: git
   #   source: .
