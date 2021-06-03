@@ -2,15 +2,17 @@
 
 import unittest
 import tempfile
+import copy
 import os
 import shutil
 import random
 import string
 from mock import patch
 from knack.util import CLIError
-from azext_cdf.tester import run_test
+from azext_cdf.tester import run_test, _manage_git_upgrade
 from azext_cdf.parser import ConfigParser, CONFIG_STATE_FILEPATH
 from azext_cdf._supporter_test import assert_state
+from azext_cdf.utils import run_command
 
 # pylint: disable=C0111
 
@@ -188,6 +190,41 @@ class TesterNoUpgrade(unittest.TestCase):
         self.assertEqual(cobj.name, self.config["name"])
         self.assertEqual(cobj.tests, self.tests)
 
+
+class TestManageGitUpgrade(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.upgrade_config = {"name": "x1", "type": "git", "path": "/" }
+        self.upgrade_config["git"] = {"repo": "https://github.com/ahelal/git-example.git"}
+# branch
+# tag
+# key
+    def test_reuse_manage_git_upgrade(self):
+        # new branch
+        upgrade_config = copy.deepcopy(self.upgrade_config)
+        upgrade_config["git"]['branch'] = "new"
+        gitdir_new = _manage_git_upgrade(upgrade_config, self.tmpdir, upgrade_config["name"], reuse_dir=True)
+        git_hash, _ = run_command("git",["show", '--pretty=format:"%H"', "--no-patch"], cwd=gitdir_new)
+        self.assertEqual(git_hash.replace('"',""), "1c247b950f1655ad84d2cc8fc4f594c6a6afb402")
+
+        # tag v0.0.2 branch
+        upgrade_config = copy.deepcopy(self.upgrade_config)
+        upgrade_config["git"]['tag'] = "v0.0.2"
+        gitdir_v0_0_2 = _manage_git_upgrade(upgrade_config, self.tmpdir, upgrade_config["name"], reuse_dir=True)
+        git_hash, _ = run_command("git",["show", '--pretty=format:"%H"', "--no-patch"], cwd=gitdir_v0_0_2)
+        self.assertEqual(git_hash.replace('"',""), "c0659f4bd2f44a917e5bc77ae41aeaa542133103")
+        self.assertEqual(gitdir_new, gitdir_v0_0_2)
+
+        # main branch
+        upgrade_config = copy.deepcopy(self.upgrade_config)
+        upgrade_config["git"]['branch'] = "main"
+        gitdir_main = _manage_git_upgrade(upgrade_config, self.tmpdir, upgrade_config["name"], reuse_dir=True)
+        git_hash, _ = run_command("git",["show", '--pretty=format:"%H"', "--no-patch"], cwd=gitdir_main)
+        self.assertEqual(git_hash.replace('"',""), "a0281435a7e1880921ae59399c98b3d04473e471")
+        self.assertEqual(gitdir_v0_0_2, gitdir_main)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
 
 # class TesteUpgrade(unittest.TestCase):
 #     def setUp(self):

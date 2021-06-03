@@ -12,7 +12,6 @@ from azext_cdf._def import CONFIG_STATE_FILEPATH
 # pylint: disable=C0111
 
 def assert_state(self, state_path, content=None):
-    print("XXXXXXXXX", state_path)
     self.assertTrue(os.path.exists(state_path))
     if not content:
         return

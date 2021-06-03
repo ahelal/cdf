@@ -127,20 +127,75 @@ Hook=info First=option1 Second=option2
 
 ##### az
 
-az 
+run az cli commands, this is the default hook type
+notice you skip the `az` in the args and type the args directly
+
+```yaml
+  creds:
+    description: "Get AKS creds"
+    ops:
+      - args: aks get-credentials --name {{ cdf.name }} --resource-group {{ cdf.resource_group}} --overwrite-existing
+      - type: print
+        args: "Your ready to use {{ cdf.name }}"
+```
 
 ##### cmd
-TODO
+
+Run commands
+
+```yaml
+  run:
+    ops:
+      - name: Load and interpolate and execute script
+        type: cmd
+        args: curl -X POST -d '{"a":1}' https://www.example.com
+```
 
 ##### script
-TODO
+
+Execute a script, The script will be loaded and interpolated first.
+
+```yaml
+  run:
+    ops:
+      - name: Load and interpolate and execute script
+        type: script
+        args:
+          - "{{cdf.config_dir}}/script.sh"```
+```
+content of `script.sh`
+
+```sh
+#!/bin/sh
+echo "{{ cdf.resource_group}}"
+```
 
 ##### print
-TODO
+
+Print supplied args to stdout
+
+```yaml
+  log:
+    ops:
+      - type: print
+        args: "This will be printed and will be interpolated {{cdf.name}}"
+```
 
 ##### call
-TODO
 
+Call another hook
+
+```yaml
+  log:
+    ops:
+      - type: print
+        args: "-> {{ args[1:] | join(' ') }}"
+  call:
+    ops:
+        # will call log hook
+      - type: call
+        args: log
+```
 
 #### Life cycle 
 

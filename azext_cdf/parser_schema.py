@@ -2,6 +2,7 @@
 
 import schema
 from schema import And, Or, Use, Optional
+# from knack.util import CLIError
 # pylint: disable=W0401,W0614
 from azext_cdf._def import *
 from azext_cdf.utils import is_part_of
@@ -43,10 +44,12 @@ UPGRADE_SCHEMA = {
     Optional(CONFIG_TYPE, default="local"): And(str, lambda s: s in CONFIG_SUPPORTED_UPGRADE_TYPES),
     Optional("path", default="/"): str,
     Optional("from_expect", default="default"): Or(str, list),
-    Optional("git_source"): (str),
-    Optional("git_version"): str,
-    Optional("git_key"): (str),
-    Optional("git_args"): (str),
+    Optional("git"): {
+        "repo": str,
+        Optional("branch"): str,
+        Optional("tag"): str,
+        Optional("key"): (str),
+    }
 }
 
 TEST_SCHEMA = {

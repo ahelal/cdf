@@ -1,11 +1,12 @@
 """ Tester  file """
 
-# import os
+import os
 import shlex
+import base64
 from distutils.util import strtobool
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg
+from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg, dir_exists
 from azext_cdf.parser import ConfigParser
 from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME
 from azext_cdf._def import CONFIG_TYPE, CONFIG_STATE_FILEPATH
@@ -152,8 +153,41 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
     run_hook_lifecycle(test_cobj, LIFECYCLE_POST_TEST)
 
 
-def _manage_git_upgrade():
-    pass
+# git fetch tags --all
+# git show HEAD~3 --pretty=format:"%H" --quiet
+# git --no-pager tag --sort=-creatordate
+#  git rev-list -n 1 $TAG
+def _run_git(args=None, cwd=None):
+    return run_command("git", args=args, interactive=False, cwd=cwd)[0]
+
+
+def _manage_git_upgrade(upgrade_config, tmp_dir, prefix_test, reuse_dir=True):
+    git_config = upgrade_config.get("git")
+    repo_name = git_config.get("repo")
+    repo_dir_path = os.path.join(tmp_dir, prefix_test)
+    if reuse_dir:
+        repo_dir_path = os.path.join(tmp_dir, str(base64.urlsafe_b64encode(repo_name.encode("utf-8")), "utf-8"))
+
+    if not dir_exists(repo_dir_path):
+        _run_git(args=["clone", repo_name, repo_dir_path])  # clone
+    # TODO support commit
+    _run_git(args=["fetch", "--all"], cwd=repo_dir_path)  # fetch all
+    if git_config.get("branch", False):
+        branch = git_config.get("branch")
+        if "~" in branch:
+            #       compute right tag
+            pass
+        else:
+            _run_git(args=["checkout", branch], cwd=repo_dir_path)
+            _run_git(args=["pull"], cwd=repo_dir_path)
+
+    if git_config.get("tag", False):
+        tag = git_config.get("tag")
+        if "~" in tag:
+            #       compute right tag
+            pass
+        _run_git(args=["checkout", tag], cwd=repo_dir_path)
+    return repo_dir_path
 
 
 def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix):
@@ -169,12 +203,13 @@ def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix
 
     if upgrade_config.get(CONFIG_TYPE) == "local":
         upgrade_location = upgrade_config.get("path")
-        upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config)
-        print(f"Provisioning initial state {prefix}_{upgrade_test}")
-        # TODO replace with _phase_cordinator to handle if provisioning fail
-        _run_provision(cmd, upgrade_cobj, None, None)
     elif upgrade_config.get(CONFIG_TYPE) == "git":
-        pass
+        upgrade_location = _manage_git_upgrade(upgrade_config, test_cobj.tmp_dir, f"{prefix}_{test_name}", reuse_dir=True)
+
+    upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config)
+    print(f"Provisioning initial state {prefix}_{upgrade_test}")
+    # TODO replace with _phase_cordinator to handle if provisioning fail
+    _run_provision(cmd, upgrade_cobj, None, None)
     # change back working dir
     return test_cobj
 
