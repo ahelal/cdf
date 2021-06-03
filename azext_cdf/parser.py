@@ -6,7 +6,7 @@ import yaml
 from schema import Schema, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 
 from knack.util import CLIError
-from jinja2 import Environment, BaseLoader, StrictUndefined, pass_context, Template
+from jinja2 import Environment, BaseLoader, StrictUndefined, Template, contextfunction  # pass_context
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError, TemplateRuntimeError
 from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_create, dir_remove, real_dirname, random_string, convert_to_list_if_need, dir_change_working
@@ -24,7 +24,8 @@ def _include_file(name):
         raise CLIError(f"include_file filter argument '{name}' error. {str(error)}") from error
 
 
-@pass_context
+# @pass_context
+@contextfunction
 def _template_file(ctx, name):
     try:
         data = _include_file(name)

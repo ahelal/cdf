@@ -194,7 +194,7 @@ class TesterNoUpgrade(unittest.TestCase):
 class TestManageGitUpgrade(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.upgrade_config = {"name": "x1", "type": "git", "path": "/" }
+        self.upgrade_config = {"name": "x1", "type": "git", "path": "/"}
         self.upgrade_config["git"] = {"repo": "https://github.com/ahelal/git-example.git"}
 # branch
 # tag
@@ -222,6 +222,14 @@ class TestManageGitUpgrade(unittest.TestCase):
         git_hash, _ = run_command("git",["show", '--pretty=format:"%H"', "--no-patch"], cwd=gitdir_main)
         self.assertEqual(git_hash.replace('"',""), "a0281435a7e1880921ae59399c98b3d04473e471")
         self.assertEqual(gitdir_v0_0_2, gitdir_main)
+
+        # commit
+        upgrade_config = copy.deepcopy(self.upgrade_config)
+        upgrade_config["git"]['commit'] = "8131806c7906a252573ef329433dd5e91d708607"
+        gitdir_commit = _manage_git_upgrade(upgrade_config, self.tmpdir, upgrade_config["name"], reuse_dir=True)
+        git_hash, _ = run_command("git",["show", '--pretty=format:"%H"', "--no-patch"], cwd=gitdir_main)
+        self.assertEqual(git_hash.replace('"',""), "8131806c7906a252573ef329433dd5e91d708607")
+        self.assertEqual(gitdir_main, gitdir_commit)
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)

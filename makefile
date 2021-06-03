@@ -23,6 +23,7 @@ install: build uninstall
 docker-build:
 	@echo "VERSION: $$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)"
 	docker build -t cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs) .
+
 docker-run:
 	docker run -v $$(pwd):/cdf -it cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)
 

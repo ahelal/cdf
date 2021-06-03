@@ -29,8 +29,7 @@ upgrade:
   #   from_expect: ["default"]
   #   git:
   #     repo: "https://aaaaaa"
-  #     branch: master
-  #     tag: ~3
+  #     tag: ~1
   # - name: last_tag
   #   type: git
   #   source: .

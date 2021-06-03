@@ -48,6 +48,7 @@ UPGRADE_SCHEMA = {
         "repo": str,
         Optional("branch"): str,
         Optional("tag"): str,
+        Optional("commit"): str,
         Optional("key"): (str),
     }
 }

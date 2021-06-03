@@ -170,7 +170,7 @@ def _manage_git_upgrade(upgrade_config, tmp_dir, prefix_test, reuse_dir=True):
 
     if not dir_exists(repo_dir_path):
         _run_git(args=["clone", repo_name, repo_dir_path])  # clone
-    # TODO support commit
+
     _run_git(args=["fetch", "--all"], cwd=repo_dir_path)  # fetch all
     if git_config.get("branch", False):
         branch = git_config.get("branch")
@@ -180,13 +180,18 @@ def _manage_git_upgrade(upgrade_config, tmp_dir, prefix_test, reuse_dir=True):
         else:
             _run_git(args=["checkout", branch], cwd=repo_dir_path)
             _run_git(args=["pull"], cwd=repo_dir_path)
-
-    if git_config.get("tag", False):
+    elif git_config.get("tag", False):
         tag = git_config.get("tag")
         if "~" in tag:
             #       compute right tag
             pass
         _run_git(args=["checkout", tag], cwd=repo_dir_path)
+        return repo_dir_path
+    elif git_config.get("commit", False):
+        commit = git_config.get("commit")
+        _run_git(args=["checkout", commit], cwd=repo_dir_path)
+    else:
+        raise CLIError(f"No branch, commit, or tag defined. in {upgrade_config['name']}")
     return repo_dir_path
 
 
