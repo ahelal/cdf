@@ -43,8 +43,7 @@ def _empty_deployment(cmd, cobj):
 
 def provision_rg_if_needed(cmd, cobj):
     ''' Create resource group if needed '''
-    print("XXXXXXX", cobj.managed_resource,)
-    print("XXXXX",  _resource_group_exists(cmd, cobj.resource_group_name))
+
     if cobj.managed_resource and not _resource_group_exists(cmd, cobj.resource_group_name):
         resource_group_tags = cobj.first_phase_vars["vars"].get("resource_group_tags", False)
         tags = {"managed_by": "CDF", "deployment": cobj.name}
