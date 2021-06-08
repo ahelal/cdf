@@ -38,7 +38,7 @@ def _template_file(ctx, name):
 
 class ConfigParser:
     '''  CDF yaml config parser class '''
-    def __init__(self, config_filepath, remove_tmp=False, test=None, working_dir=None, override_config=None):
+    def __init__(self, config_filepath, remove_tmp=False, test=None, working_dir=None, override_config=None, state_locking=True):
         self.data = {}
         self.state = {}
         self.first_phase_vars = {}
@@ -57,7 +57,7 @@ class ConfigParser:
         self._setup_test()
         if override_config:
             self.data = {**self.data, **override_config}
-        self._setup_first_phase_interpolation(remove_tmp)  # First phase
+        self._setup_first_phase_interpolation(state_locking, remove_tmp)  # First phase
         self._setup_second_phase_variables()  # Second phase
         self.update_hooks_result(self.state.result_hooks)
         dir_change_working(self.cwd)
@@ -93,7 +93,7 @@ class ConfigParser:
             for hooks_ops in self.data[CONFIG_TESTS][test].get(CONFIG_EXPECT, {}).get(CONFIG_HOOKS, []):
                 for hook in hooks_ops:
                     if hook not in hooks:
-                        raise CLIError(f"unknown hook name'{hook}' in expect test '{test}'")
+                        raise CLIError(f"unknown hook name '{hook}' in expect test '{test}'")
             upgrade_from_names = []
             for upgrade in self.data[CONFIG_TESTS][test].get("upgrade_from", []):
                 name = upgrade.get(CONFIG_NAME).lower().strip()
@@ -156,7 +156,7 @@ class ConfigParser:
             RUNTIME_RUN_ONCE_KEY: RUNTIME_RUN_ONCE,
         }
 
-    def _setup_first_phase_interpolation(self, remove_tmp=False):
+    def _setup_first_phase_interpolation(self, state_locking, remove_tmp=False):
         ''' first phase interpolation '''
         # self.override override_state=None, prefix_state=None,
         self.first_phase_vars[CONFIG_CDF][CONFIG_TMP] = self.interpolate(FIRST_PHASE, self.data[CONFIG_TMP], context=f"key {CONFIG_TMP}")
@@ -164,7 +164,7 @@ class ConfigParser:
             dir_remove(self.tmp_dir)
         dir_create(self.tmp_dir)
         self.data[CONFIG_STATE_FILEPATH] = self.interpolate(FIRST_PHASE, self.data[CONFIG_STATE_FILEPATH], context=f"key {CONFIG_STATE_FILEPATH}")
-        self.state = State(self.data[CONFIG_STATE_FILEPATH])  # initialize state
+        self.state = State(self.data[CONFIG_STATE_FILEPATH], locking=state_locking)  # initialize state
         self.jinja_env.globals["store"] = self.state.store_get  # setup store functions in jinja2
 
         self.first_phase_vars[CONFIG_CDF][CONFIG_NAME] = self.interpolate(FIRST_PHASE, self.data[CONFIG_NAME], f"key {CONFIG_NAME}")
@@ -301,6 +301,18 @@ class ConfigParser:
             hooks.append(list(k.keys())[0])
         return hooks
 
+    def upgrade_flaten(self, test_name):
+        ''' return deployment mode '''
+        upgrade_path = []
+        upgrades = self.data[CONFIG_UPGRADE] + self.get_test(test_name).get(CONFIG_UPGRADE)
+        for upgrade in self.interpolate(FIRST_PHASE, upgrades, context="upgrade path"):
+            from_expects = convert_to_list_if_need(upgrade.get("from_expect"))
+            for from_expect in from_expects:
+                upgrade_copy = upgrade.copy()
+                upgrade_copy["from_expect"] = from_expect
+                upgrade_path.append(upgrade_copy)
+        return upgrade_path
+
     # TODO merge with get_test
     @property
     def tests(self):
@@ -376,15 +388,3 @@ class ConfigParser:
         ''' return deployment mode '''
 
         return self.data[CONFIG_DEPLOYMENT_COMPLETE]
-
-    @property
-    def upgrade_flaten(self):
-        ''' return deployment mode '''
-        upgrade_path = []
-        for upgrade in self.interpolate(FIRST_PHASE, self.data[CONFIG_UPGRADE], context="upgrade path"):
-            from_expects = convert_to_list_if_need(upgrade.get("from_expect"))
-            for from_expect in from_expects:
-                upgrade_copy = upgrade.copy()
-                upgrade_copy["from_expect"] = from_expect
-                upgrade_path.append(upgrade_copy)
-        return upgrade_path

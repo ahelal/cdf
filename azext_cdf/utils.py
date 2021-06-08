@@ -63,7 +63,7 @@ class Progress():
 
 
 # TODO should be refactored into parser code
-def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None):
+def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None, state_locking=True):
     ''' return config obj and cwd'''
     cwd = os.getcwd()
     override_config = {}
@@ -71,7 +71,7 @@ def init_config(config, config_parser, remove_tmp=False, working_dir=None, state
         override_config = {
             CONFIG_STATE_FILEPATH: f"file://{state_file}",
         }
-    return config_parser(config_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config), cwd
+    return config_parser(config_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config, state_locking=state_locking), cwd
 
 
 def real_dirname(dir_path):

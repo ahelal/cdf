@@ -128,7 +128,8 @@ hooks:
       - name: C
         type: print
         args: print
-      - type: print
+      - name: print
+        type: print
         args: "A={{ hooks.cmd.A.stdout }}\nB={{ hooks.cmd.B.stderr }}\nC={{ hooks.cmd.C.stdout }}"
   fail:
     description: "Fail"
@@ -143,6 +144,8 @@ hooks:
         args: Cleaning up {{vars.log_file}}
       - type: cmd
         args: "rm -f {{vars.log_file}}"
+      - type: cmd
+        args: "rm -f {{cdf.tmp_dir}}/script.txt"
 
 #### to do tests
 tests:

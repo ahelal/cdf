@@ -169,7 +169,7 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, params=
         output_resources
         output
     '''
-    arm_template_file = f"{tmp_dir}/targetfile.json"
+    arm_template_file = f"{tmp_dir}/{deployment_name}_deployment.json"
     _LOGGER.debug(" Building bicep file in tmp dir %s", arm_template_file)
     build_bicep_file(cmd, bicep_file, outfile=arm_template_file)
 

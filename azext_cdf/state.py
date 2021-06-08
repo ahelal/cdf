@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import datetime
+import os
 import semver
 from knack.util import CLIError
 from knack.log import get_logger
@@ -16,7 +17,7 @@ _LOGGER = get_logger(__name__)
 class State():
     ''' The state class '''
 
-    def __init__(self, state_file):
+    def __init__(self, state_file, locking=True, ignore_lock_error=False):
         self.config_hooks = None
         if state_file.startswith('file://'):
             self.state_file = state_file[len("file://"):]
@@ -27,6 +28,7 @@ class State():
         else:
             raise CLIError(f"Error unsupported schmea for state file '{state_file}' supported schemas 'file://'|'https://'|'http://'")
         if self._read_state():
+            self._lock(locking, ignore_lock_error)
             return
         # New state file
         self.state_db = {
@@ -185,6 +187,29 @@ class State():
         except KeyError:
             self.state_db[STATE_STORE][key] = value
             return value
+
+    def _lock(self, locking, ignore_lock_error):
+        if not locking:
+            return True
+        this_pid = os.getpid()
+        if this_pid == self.state_db.get("LOCK", None):
+            return True
+        if self.state_db.get("LOCK", None) is None:
+            self.state_db["LOCK"] = this_pid
+            self._flush_state(flush=True)
+            return True
+        # No
+        try:
+            os.kill(self.state_db["LOCK"], 0)
+        except OSError:
+            # process does not exist, stale pid
+            self.state_db["LOCK"] = this_pid
+            self._flush_state(flush=True)
+            return True
+        else:
+            if not ignore_lock_error:
+                raise CLIError(f"State is locked by PID {self.state_db['LOCK']}")
+            return False
 
     @property
     def status(self):

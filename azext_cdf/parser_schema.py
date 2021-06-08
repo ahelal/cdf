@@ -63,6 +63,8 @@ TEST_SCHEMA = {
         Optional(CONFIG_RG_MANAGED, default=True): bool,
         Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
         Optional(CONFIG_UP): And(str, len),
+        Optional("upgrade_strategy", default="all"): And(str, lambda s: s in ("all", "fresh", "upgrade")),
+        Optional(CONFIG_UPGRADE, default=[]): _list_or_tuple_of(UPGRADE_SCHEMA),
         # Optional('vars_file', default=[]): Or(str,list),
         Optional(CONFIG_VARS): dict,
         Optional(CONFIG_PARAMS): dict,

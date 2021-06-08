@@ -1,0 +1,13 @@
+description: "Default"
+params:
+  tags: "{{ vars.tags }}"
+
+vars:
+  tags:
+    test: "default"
+upgrade_strategy: all
+expect:
+  up:
+    fail: false
+    assert:
+      - "{{ result.outputs.name.value == 'helloworld' }}"

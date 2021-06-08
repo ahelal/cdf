@@ -219,34 +219,46 @@ def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix
     return test_cobj
 
 
-def _upgrade_matrix(cobj, upgrade_strategy):
+# def _upgrade_matrix(cobj, upgrade_strategy):
+#     matrix = []
+#     if upgrade_strategy in ("all", "fresh"):
+#         matrix.append({CONFIG_NAME: "fresh", "from_expect": None})
+#     if upgrade_strategy in ("all", "upgrade"):
+#         matrix = matrix + cobj.upgrade_flaten
+#     return matrix
+
+def _upgrade_matrix(cobj, global_upgrade_strategy, test_name):
     matrix = []
-    if upgrade_strategy in ("all", "fresh"):
+    test_upgrade_strategy = cobj.get_test(test_name).get("upgrade_strategy", "all")
+    if global_upgrade_strategy in ("all", "fresh") and test_upgrade_strategy in ("all", "fresh"):
         matrix.append({CONFIG_NAME: "fresh", "from_expect": None})
-    if upgrade_strategy in ("all", "upgrade"):
-        matrix = matrix + cobj.upgrade_flaten
+    if global_upgrade_strategy in ("all", "upgrade") and test_upgrade_strategy in ("all", "upgrade"):
+        matrix = matrix + cobj.upgrade_flaten(test_name)
     return matrix
 
 
-# pylint: disable=W0613
 def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_strategy, upgrade_strategy):
     """ test handler function. Run all tests or specific ones """
 
     results = {}
     cobj.state.transition_to_phase(STATE_PHASE_TESTING)
-    for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy):
-        prefix = upgrade_obj[CONFIG_NAME]
-        upgrade_title = f"'{upgrade_obj['name']}'"
-        if upgrade_obj['from_expect']:
-            prefix = f"{upgrade_obj['name']}_{upgrade_obj.get('from_expect')}"
-            upgrade_title = f"'{upgrade_obj['name']}' from '{upgrade_obj['from_expect']}'"
-        results[prefix] = {}
-        for test_name in test_args:
-            print(f"Running test: '{test_name}' upgrade path: {upgrade_title}")
+
+    for test_name in test_args:
+        for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy, test_name):
+            prefix = upgrade_obj[CONFIG_NAME]
+            upgrade_title = f"'{upgrade_obj['name']}'"
+            if upgrade_obj['from_expect']:
+                prefix = f"{upgrade_obj['name']}_{upgrade_obj.get('from_expect')}"
+                upgrade_title = f"'{upgrade_obj['name']}' from '{upgrade_obj['from_expect']}'"
+            if prefix not in results:
+                results[prefix] = {}
+
             results[prefix][test_name] = {"failed": False}
+            print(f"Running test: '{test_name}' upgrade path: {upgrade_title}")
             test_cobj = _prepera_upgrade(cmd, upgrade_obj, config, working_dir, test_name, prefix)  # not sure about logic
-            print("Running test")
             _run_single_test(cmd, test_cobj, results[prefix][test_name], test_name, exit_on_error, down_strategy)
         # TODO write tests to state
     cobj.state.transition_to_phase(STATE_PHASE_TESTED)
     return results
+
+# pylint disable=W0613
