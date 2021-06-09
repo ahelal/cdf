@@ -115,6 +115,8 @@ def dir_remove(filepath):
 def dir_change_working(dirpath):
     ''' Change working directory '''
 
+    if dirpath is None:
+        dirpath = os.getcwd()
     abs_path = os.path.realpath(dirpath)
     if not abs_path:
         raise CLIError(f"Invalid working directory supplied {abs_path}")
@@ -334,7 +336,7 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
         stderr = process.stderr.decode('utf-8')
         process.check_returncode()
         return stdout, stderr
-    except subprocess.CalledProcessError as error:
+    except (subprocess.CalledProcessError, FileNotFoundError) as error:
         context = f"Run command error. {str(error)}"
         if stdout:
             context = f"{context} stdout:{stdout}"
