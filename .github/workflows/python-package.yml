@@ -57,7 +57,7 @@ jobs:
           az bicep install
           az --version
           curl -L https://releases.hashicorp.com/terraform/${{ matrix.terraform-version }}/terraform_${{ matrix.terraform-version }}_linux_amd64.zip -o /tmp/terraform_${{ matrix.terraform-version }}_linux_amd64.zip
-          unzip /tmp/terraform_${{ matrix.terraform-version }}_linux_amd64.zip -d /usr/bin
+          unzip /tmp/terraform_${{ matrix.terraform-version }}_linux_amd64.zip -d ~/bin
           terraform --version
       - name: Install CDF
         run: |
