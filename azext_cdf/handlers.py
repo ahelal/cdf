@@ -170,7 +170,9 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
 def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, state_file=None, exit_on_error=False, down_strategy="success", upgrade_strategy="all"):
     """ test handler function. Run all tests or specific ones """
 
-    working_dir = os.path.realpath(working_dir)
+    if working_dir is not None:
+        working_dir = os.path.realpath(working_dir)
+    print(working_dir)
     cobj = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)[0]
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     dir_change_working(working_dir)
