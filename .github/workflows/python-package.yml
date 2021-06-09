@@ -56,8 +56,8 @@ jobs:
           pip install azure-cli==${{matrix.az-cli-version}}
           az bicep install
           az --version
-          curl -L https://releases.hashicorp.com/terraform/${{terraform-version}}/terraform_${{terraform-version}}_linux_amd64.zip -o /tmp/terraform_${{terraform-version}}_linux_amd64.zip
-          unzip /tmp/terraform_${{terraform-version}}_linux_amd64.zip -d /usr/bin
+          curl -L https://releases.hashicorp.com/terraform/${{ matrix.terraform-version }}/terraform_${{ matrix.terraform-version }}_linux_amd64.zip -o /tmp/terraform_${{ matrix.terraform-version }}_linux_amd64.zip
+          unzip /tmp/terraform_${{ matrix.terraform-version }}_linux_amd64.zip -d /usr/bin
           terraform --version
       - name: Install CDF
         run: |
