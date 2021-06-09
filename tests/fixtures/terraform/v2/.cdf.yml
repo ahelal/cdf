@@ -2,7 +2,6 @@
 name: "ssh_t_{{ store('postfix', random_string(5, 'lower')) }}"
 resource_group: "cdf_terraform_{{cdf.name}}"
 location: "eastus2"
-
 provisioner: "terraform"
 
 params:
@@ -10,3 +9,28 @@ params:
   resource_group: "{{ cdf.resource_group }}"
   key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrs/zJhwDvfjcmXiwlabkZMs7qjA0hl9c3RXBpWYQx2Ps/lhN/I043LsU1zAFPg9P5qaqzVjc73Zky2tZ8qVFKuHAUV8ccwLEwuvWmeqFTK5of6Dt/fuWRbCfpZDcq1nqp+v9bG+OhdNhOUMJFCbFWpHpAP95IOSo9YXeFLdegqMEm8zzgKojYE7RVrrejejmhZcoRMNZj4pxPk/FTqVoTR4C5lzZMBR0XLY/kzq4ay/LfAKyJ+EaNOeFOv/pCIw69DqBDqLiMUwHJLmGkw9azdT6FBXIQhhfeEilItQzfOnzTOh87Xvhv/z0fuhPynUbT6KWX0GO5oTRXE5Xf+TGR"
   location: "{{ cdf.location }}"
+
+tests:
+  default:
+    description: "Default fresh"
+    upgrade_strategy: fresh
+    expect:
+      up:
+        fail: false
+        assert:
+          - "{{ result.outputs.hello.value == 'v2' }}"
+  default_upgrade:
+    description: "Default upgrade"
+    upgrade_strategy: upgrade
+    upgrade:
+      - name: v1
+        type: local
+        path: "{{ cdf.config_dir }}/../v1"
+        from_expect: ["default"]
+    expect:
+      up:
+        fail: false
+        assert:
+          - "{{ result.outputs.hello.value == 'v2' }}"
+        cmd:
+          - /bin/sh {{ cdf.config_dir }}/tests/default/resource_group.sh {{cdf.resource_group}}

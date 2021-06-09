@@ -129,6 +129,9 @@ class ConfigParser:
     def _setup_test(self):
         if not self.test:
             return
+        if not self.get_test(self.test):
+            raise CLIError(f"Could not find test {self.test}")
+
         self.data[CONFIG_NAME] = self.data[CONFIG_TESTS][self.test].get(CONFIG_NAME, f"{self.data[CONFIG_NAME]}_{self.test}_test")
         self.data[CONFIG_TESTS][self.test][CONFIG_DESCRIPTION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_DESCRIPTION, f"{self.data[CONFIG_NAME]} {self.test} test")
         self.data[CONFIG_LOCATION] = self.data[CONFIG_TESTS][self.test].get(CONFIG_LOCATION, self.data[CONFIG_LOCATION])

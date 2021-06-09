@@ -226,7 +226,7 @@ def run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, no
     ''' Run terraform apply '''
     # TODO fix return
     _run_terraform_cmd(deployment_name, "apply", terraform_dir, tmp_dir, params=params, no_prompt=no_prompt)
-    stdout, _ = run_command("terraform", args=["output", "-json"], interactive=False, cwd=terraform_dir)
+    stdout, _ = run_command("terraform", args=["output", f"-state={tmp_dir}/{deployment_name}.tfstate", "-json"], interactive=False, cwd=terraform_dir)
     try:
         output = json.loads(stdout)
     # except subprocess.CalledProcessError as error:
@@ -246,7 +246,7 @@ def _run_terraform_cmd(deployment_name, terraform_cmd, terraform_dir, tmp_dir, p
         json_write_to_file(varsfile, params)
 
     run_command("terraform", args=["init"], interactive=False, cwd=terraform_dir)
-    args = [terraform_cmd, f"-input={no_prompt}", f"-state={deployment_name}.tfstate", "-auto-approve"]
+    args = [terraform_cmd, f"-input={no_prompt}", f"-state={tmp_dir}/{deployment_name}.tfstate", "-auto-approve", "-no-color"]
     if params:
         args.append("-var-file")
         args.append(varsfile)

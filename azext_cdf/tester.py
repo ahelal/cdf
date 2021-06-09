@@ -242,7 +242,6 @@ def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_stra
 
     results = {}
     cobj.state.transition_to_phase(STATE_PHASE_TESTING)
-
     for test_name in test_args:
         for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy, test_name):
             prefix = upgrade_obj[CONFIG_NAME]

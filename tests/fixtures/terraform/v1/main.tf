@@ -25,7 +25,7 @@ resource "azurerm_ssh_public_key" "admin" {
 }
 
 output "hello" {
-  value = "example"
+  value = "v1"
 }
 
 output "name" {

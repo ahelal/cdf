@@ -40,6 +40,7 @@ jobs:
       matrix:
         python-version: [3.7, 3.8, 3.9]
         az-cli-version: [2.24.2, 2.23.0, 2.22.1]
+        terraform-version: [0.15.5]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -50,12 +51,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r dev-requirements.txt
-      - name: Install AZ & bicep
+      - name: Install AZ, bicep & terraform
         run: |
-          echo "install azure-cli"
           pip install azure-cli==${{matrix.az-cli-version}}
           az bicep install
           az --version
+          curl -L https://releases.hashicorp.com/terraform/${{terraform-version}}/terraform_${{terraform-version}}_linux_amd64.zip -o /tmp/terraform_${{terraform-version}}_linux_amd64.zip
+          unzip /tmp/terraform_${{terraform-version}}_linux_amd64.zip -d /usr/bin
+          terraform --version
       - name: Install CDF
         run: |
           pip install wheel

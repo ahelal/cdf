@@ -46,8 +46,12 @@ test-unit:
 
 test-integration:
 	pytest -v tests --color=yes --code-highlight=yes -s
+
 	@echo "running expect default test"
 	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default
+
+	@echo "running expect terraform test"
+	az cdf test -w ./tests/fixtures/terraform/v2/ --down-strategy=always
 
 test-clean:
 	find . -type d -iname foo -delete
