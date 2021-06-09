@@ -40,7 +40,7 @@ jobs:
       matrix:
         python-version: [3.7, 3.8, 3.9]
         az-cli-version: [2.24.2, 2.23.0, 2.22.1]
-        terraform-version: [0.15.5]
+        terraform-version: [1.0.0]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
