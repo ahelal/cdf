@@ -67,5 +67,5 @@ jobs:
           az cdf debug version
       - name: Integration testing
         run: |
-          az login --service-principal --username ${{ secrets.APP_ID }} --password ${{ secrets.APP_PASSWORD }} --tenant ${{ secrets.APP_TENANT_ID }} -o none
+          az login --service-principal --username ${{ secrets.ARM_CLIENT_ID }} --password ${{ secrets.ARM_CLIENT_SECRET }} --tenant ${{ secrets.ARM_TENANT_ID }} -o none
           make test-integration
