@@ -7,6 +7,8 @@ EXTENTION_NAME := cdf
 
 source-venv: $(VENV)/bin/activate
 test: test-lint test-unit test-integration
+test-integration: test-integration-code test-integration-bicep test-integration-terraform
+
 venv:
 	python3 -m venv $(VENV)
 	pip3 install -r dev-requirements.txt
@@ -44,12 +46,21 @@ test-unit:
 	# python3 -m unittest discover -s azext_cdf -p '*_test.py' -v
 	pytest -v azext_cdf --color=yes --code-highlight=yes
 
-test-integration:
+test-integration-code:
 	pytest -v tests --color=yes --code-highlight=yes -s
 
+test-integration-bicep:
 	@echo "running expect default test"
 	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default
+# also use cd instead of -w 
+	@echo "running expect expect_to_fail_and_fails test"
+	@cd ./tests/fixtures/bicep/v2
+	az cdf test expect_to_fail_and_fails
+	@cd ../../../../
+	@echo "running expect expect_to_fail_and_passes test"
+	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always expect_to_fail_and_passes
 
+test-integration-terraform:
 	@echo "running expect terraform test"
 	az cdf test -w ./tests/fixtures/terraform/v2/ --down-strategy=always
 
