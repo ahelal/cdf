@@ -17,6 +17,10 @@ from azext_cdf.hooks import run_hook
 _LOGGER = get_logger(__name__)
 
 
+def _print_x(message):
+    print(message)
+
+
 def _run_hook(_, cobj, __, expect_hook):
     hook_name = expect_hook.get("hook")
     hook_args = expect_hook.get("args", [])
@@ -84,6 +88,7 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, result, **kw
     test_name = kwargs.get("test_name")
     result[phase_name] = {"expect_to_fail": expect_to_fail}
     failed_expection = False
+    _print_x(f"  Calling '{phase_name}', expect to fail: '{expect_to_fail}'")
     try:
         func(cmd, test_cobj, test_name, expect_obj)
         if expect_to_fail:
@@ -106,13 +111,16 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, result, **kw
         try:
             de_provision(cmd, test_cobj)
         except CLIError as error:
-            _LOGGER.warning("Failed to clean up %s, %s", test_name, error)
+            _print_x(f"  Failed to cleanup '{test_name}' {str(error)}")
+            _LOGGER.warning("Failed to clean up %s, %s", test_name, str(error))
     elif failed_expection and down_strategy == "always" and phase_name == "de-provisioning":
+        _print_x(f"  Failed to cleanup '{test_name}' {str(result[phase_name]['msg'])}")
         _LOGGER.warning("Failed to clean up %s, %s", test_name, str(result[phase_name]["msg"]))
 
     if exit_on_error and failed_expection:
+        _print_x(f"  Exiting test '{test_name}' since exit on error is set. ")
         raise CLIError(f"test '{test_name}' failed with msg '{result.get('msg', '')}")
-
+    _print_x(f"  '{phase_name}' failed: {result[phase_name]['failed']}, expected to fail: {expect_to_fail}, Msg: '{result[phase_name]['msg']}'")
 
 def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_strategy):
     # Run pre test life cycle
@@ -134,7 +142,6 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
         hook_object = [{CONFIG_NAME: f"hook {hook}", "fail_override": expect_obj.get("fail", False), "func": _run_hook},
                        {CONFIG_NAME: f"hook {hook} expect", "fail_override": False, "func": _run_expect_tests}]
         for i in hook_object:
-            _phase_cordinator(cmd, test_cobj, i["func"], i[CONFIG_NAME], expect_obj, result, test_name=test_name, exit_on_error=exit_on_error, down_strategy=down_strategy, fail=i["fail_override"])
             if result["failed"]:
                 return
 
@@ -212,20 +219,12 @@ def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix
         upgrade_location = _manage_git_upgrade(upgrade_config, test_cobj.tmp_dir, f"{prefix}_{test_name}", reuse_dir=True)
 
     upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config)
-    print(f"Provisioning initial state {prefix}_{upgrade_test}")
+    _print_x(f"  Upgrade provisioning initial state {prefix}_{upgrade_test}")
     # TODO replace with _phase_cordinator to handle if provisioning fail
     _run_provision(cmd, upgrade_cobj, None, None)
     # change back working dir
     return test_cobj
 
-
-# def _upgrade_matrix(cobj, upgrade_strategy):
-#     matrix = []
-#     if upgrade_strategy in ("all", "fresh"):
-#         matrix.append({CONFIG_NAME: "fresh", "from_expect": None})
-#     if upgrade_strategy in ("all", "upgrade"):
-#         matrix = matrix + cobj.upgrade_flaten
-#     return matrix
 
 def _upgrade_matrix(cobj, global_upgrade_strategy, test_name):
     matrix = []
@@ -242,6 +241,7 @@ def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_stra
 
     results = {}
     cobj.state.transition_to_phase(STATE_PHASE_TESTING)
+    _print_x(f"Test configuration, exit on error: '{exit_on_error}', down strategy: '{down_strategy}', upgrade strategy: '{upgrade_strategy}'")
     for test_name in test_args:
         for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy, test_name):
             prefix = upgrade_obj[CONFIG_NAME]
@@ -253,7 +253,7 @@ def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_stra
                 results[prefix] = {}
 
             results[prefix][test_name] = {"failed": False}
-            print(f"Running test: '{test_name}' upgrade path: {upgrade_title}")
+            _print_x(f"Starting test: '{test_name}', upgrade path: {upgrade_title}")
             test_cobj = _prepera_upgrade(cmd, upgrade_obj, config, working_dir, test_name, prefix)  # not sure about logic
             _run_single_test(cmd, test_cobj, results[prefix][test_name], test_name, exit_on_error, down_strategy)
         # TODO write tests to state

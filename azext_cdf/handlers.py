@@ -172,7 +172,7 @@ def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, s
 
     if working_dir is not None:
         working_dir = os.path.realpath(working_dir)
-    print(working_dir)
+
     cobj = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)[0]
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     dir_change_working(working_dir)
