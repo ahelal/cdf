@@ -122,6 +122,7 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, result, **kw
         raise CLIError(f"test '{test_name}' failed with msg '{result.get('msg', '')}")
     _print_x(f"  '{phase_name}' failed: {result[phase_name]['failed']}, expected to fail: {expect_to_fail}, Msg: '{result[phase_name]['msg']}'")
 
+
 def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_strategy):
     # Run pre test life cycle
     run_hook_lifecycle(test_cobj, LIFECYCLE_PRE_TEST)

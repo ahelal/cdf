@@ -343,3 +343,25 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
         if stderr:
             context = f"{context} stdout:{stderr}"
         raise CLIError(context) from error
+
+# class Colors:
+#     ''' Colors '''
+#     HEADER = '\033[95m'
+#     OK_BLUE = '\033[94m'
+#     OK_CYAN = '\033[96m'
+#     OK_GREEN = '\033[92m'
+#     WARNING = '\033[93m'
+#     FAIL = '\033[91m'
+#     END_C = '\033[0m'
+#     BOLD = '\033[1m'
+#     UNDERLINE = '\033[4m'
+
+# def p_color(message, enabled=True, color=None):
+#     ''' Print color message '''
+
+#     if not enabled:
+#         return
+#     if not color:
+#         print(message)
+#         return
+#     print(f"{color}{message}{Colors.END_C}")
