@@ -154,6 +154,3 @@ tests:
 
   expect_to_fail_and_fails:
     file: "{{cdf.config_dir}}/tests/expect_to_fail_and_fails/test.yml"
-
-  expect_to_fail_and_passes:
-    file: "{{cdf.config_dir}}/tests/expect_to_fail_and_passes/test.yml"
