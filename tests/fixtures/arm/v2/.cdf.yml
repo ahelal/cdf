@@ -14,7 +14,7 @@ hooks:
   fail:
     ops: [{ type: cmd, args: exit 1 }]
   pass:
-    ops: [{ type: cmd, args: exit 0 }]
+    ops: [{ type: cmd, args: echo "hello" }]
 
 upgrade:
   - name: v1

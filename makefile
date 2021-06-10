@@ -7,7 +7,7 @@ EXTENTION_NAME := cdf
 
 source-venv: $(VENV)/bin/activate
 test: test-lint test-unit test-integration
-test-integration: test-integration-code test-integration-bicep test-integration-terraform
+test-integration: test-integration-code test-integration-bicep test-integration-terraform test-integration-arm
 
 venv:
 	python3 -m venv $(VENV)
@@ -50,9 +50,12 @@ test-integration-code:
 	pytest -v tests --color=yes --code-highlight=yes -s
 
 test-integration-arm:
-#TODO
 	@echo "running expect default test"
-	az cdf test -w ./tests/fixtures/bicep/v2 
+	az cdf up -w ./tests/fixtures/arm/v2 
+	az cdf status -w ./tests/fixtures/arm/v2 
+	az cdf hook -w ./tests/fixtures/arm/v2 pass
+	az cdf down -y -w ./tests/fixtures/arm/v2
+	az cdf test -w ./tests/fixtures/arm/v2
 
 test-integration-bicep:
 	@echo "running expect default test"
