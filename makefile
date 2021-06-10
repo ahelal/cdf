@@ -58,6 +58,7 @@ test-integration-bicep:
 
 test-integration-terraform:
 	@echo "running expect terraform test"
+	env
 	az cdf test -w ./tests/fixtures/terraform/v2/ --down-strategy=always
 
 test-clean:
