@@ -5,7 +5,7 @@
 def load_arguments(self, _):
     with self.argument_context("cdf") as context:
         context.argument("config", options_list=["--config", "-c"], help="config file for cdf", default=".cdf.yml")
-        context.argument("working_dir", options_list=["--work-dir", "-w"], help="Change working directory", default=False)
+        context.argument("working_dir", options_list=["--work-dir", "-w"], help="Change working directory", default=None)
         context.argument("state_file", options_list=["--state", "-s"], help="State file", default=False)
 
     with self.argument_context("cdf init") as context:

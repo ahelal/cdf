@@ -11,8 +11,8 @@ unittest.TestLoader.sortTestMethodsUsing = None
 # pylint: disable=C0111
 class AzCDF(unittest.TestCase):
     def setUp(self):
-        self.work_dir = f"{os.getcwd()}/tests/fixtures/bicep"
-        shutil.rmtree(f"{os.getcwd()}/tests/fixtures/bicep/.cdf_tmp", ignore_errors=True)
+        self.work_dir = f"{os.getcwd()}/tests/fixtures/bicep/v2"
+        shutil.rmtree(f"{os.getcwd()}/tests/fixtures/bicep/v2/.cdf_tmp", ignore_errors=True)
     def test_cdf_debug_version(self):
         stdout, stderr = run_command("az", ["cdf", "debug", "version"])
         self.assertIn("CDF", stdout)
@@ -45,8 +45,8 @@ class AzCDF(unittest.TestCase):
 class FixtureBicep(unittest.TestCase):
     resource_id = None
     def setUp(self):
-        self.work_dir = f"{os.getcwd()}/tests/fixtures/bicep"
-        self.hook_log = f"{os.getcwd()}/tests/fixtures/bicep/.cdf_tmp/hook_log.txt"
+        self.work_dir = f"{os.getcwd()}/tests/fixtures/bicep/v2"
+        self.hook_log = f"{os.getcwd()}/tests/fixtures/bicep/v2/.cdf_tmp/hook_log.txt"
         remove_file(self.hook_log)
 
     def test_1_cdf_up_0(self):
@@ -94,7 +94,7 @@ class FixtureBicep(unittest.TestCase):
 
     def test_2_cdf_hook_1_script(self):
         stdout, stderr = run_command("az", ["cdf", "hook", "script", "-w", self.work_dir])
-        self.hook_log = f"{os.getcwd()}/tests/fixtures/bicep/.cdf_tmp/script.txt"
+        self.hook_log = f"{os.getcwd()}/tests/fixtures/bicep/v2/.cdf_tmp/script.txt"
         with open(self.hook_log, 'r') as file:
             data = file.read().replace('\n', '')
         self.assertEqual(data, "eastus2")

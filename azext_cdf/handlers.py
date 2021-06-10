@@ -38,32 +38,32 @@ def debug_version_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_fi
 def debug_config_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug config handler, dump the configuration file'''
 
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, state_locking=False)
     return cobj.config
 
 
 def debug_state_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug state handler, return state content '''
 
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, state_locking=False)
     return cobj.state.state
 
 
 def debug_result_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug result handler, return results after up'''
 
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, state_locking=False)
     return cobj.state.result_up
 
 
 def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, state_file=None):
     ''' debug deployment error handler, return results last known deployment error '''
 
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, state_locking=False)
     if cobj.provisioner == "bicep" or cobj.provisioner == "arm":
-        if not file_exists(f"{cobj.tmp_dir}/targetfile.json"):
-            raise CLIError(f"{cobj.tmp_dir}/targetfile.json does not exists please run up first")
-        arm_deployment = json_load(file_read_content(f"{cobj.tmp_dir}/targetfile.json"))
+        if not file_exists(f"{cobj.tmp_dir}/{cobj.name}_deployment.json"):
+            raise CLIError(f"{cobj.tmp_dir}/{cobj.name}_deployment.json does not exists please run up first")
+        arm_deployment = json_load(file_read_content(f"{cobj.tmp_dir}/{cobj.name}_deployment.json"))
         deployments_status = []
         deployment = check_deployment_error(cmd, resource_group_name=cobj.resource_group_name, deployment_name=cobj.name, deployment_type="Microsoft.Resources/deployments")
         if deployment:
@@ -83,7 +83,7 @@ def debug_deployment_error_handler(cmd, config=CONFIG_DEFAULT, working_dir=None,
 def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phase=2, state_file=None):
     ''' debug interpolate handler, start an interactive jinja2 interpolation shell like '''
 
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, state_locking=False)
     line = ""
     print("Type your jinja2 expression.")
     print("to exit type 'quit' or 'exit' or 'ctrl+c'.")
@@ -137,7 +137,7 @@ def hook_handler(cmd, config=CONFIG_DEFAULT, hook_args=None, working_dir=None, c
 def status_handler(cmd, config=CONFIG_DEFAULT, events=False, working_dir=None, state_file=None):
     """ status handler function, return status """
 
-    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, state_locking=False)
     output_status = {}
     if events:
         output_status["events"] = cobj.state.events
@@ -170,7 +170,9 @@ def up_handler(cmd, config=CONFIG_DEFAULT, remove_tmp=False, prompt=False, worki
 def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, state_file=None, exit_on_error=False, down_strategy="success", upgrade_strategy="all"):
     """ test handler function. Run all tests or specific ones """
 
-    working_dir = os.path.realpath(working_dir)
+    if working_dir is not None:
+        working_dir = os.path.realpath(working_dir)
+
     cobj = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file)[0]
     Progress(cmd, pseudo=True)  # hacky way to disable default progress animation
     dir_change_working(working_dir)
@@ -193,4 +195,3 @@ def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, s
                 _LOGGER.warning(test)
     if one_test_failed:
         raise CLIError(f"At-least on test failed in the following upgrades paths: {set(upgrade_failed)}")
-    return results

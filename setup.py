@@ -2,7 +2,6 @@
 
 try:
     from azure_bdist_wheel import cmdclass
-    print(cmdclass)
 except ImportError:
     from distutils import log as logger
     logger.warn("Wheel is not available, disabling bdist_wheel hook")

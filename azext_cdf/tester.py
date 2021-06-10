@@ -1,18 +1,24 @@
 """ Tester  file """
 
-# import os
+import os
 import shlex
+import base64
 from distutils.util import strtobool
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg
+from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg, dir_exists
 from azext_cdf.parser import ConfigParser
-from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME, CONFIG_STATE_FILENAME
+from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME
+from azext_cdf._def import CONFIG_TYPE, CONFIG_STATE_FILEPATH
 from azext_cdf.hooks import run_hook_lifecycle
 from azext_cdf.provisioner import de_provision, provision, run_command
 from azext_cdf.hooks import run_hook
 
 _LOGGER = get_logger(__name__)
+
+
+def _print_x(message):
+    print(message)
 
 
 def _run_hook(_, cobj, __, expect_hook):
@@ -32,15 +38,15 @@ def _run_de_provision(cmd, cobj, _, __):
 
 
 def _run_expect_tests(_, cobj, test_name, expect_obj):
-    # TODO simplify ugly
     errors = []
+    # run commands
     expect_cmds = expect_obj.get("cmd")
     for expect_cmd in convert_to_list_if_need(expect_cmds):
         try:
             _expect_cmd_exec(cobj, test_name, expect_cmd)
         except CLIError as error:
             errors.append(f"expect cmd failed '{expect_cmd}'. Error: '{error}'")
-
+    # run asserts
     asserts = expect_obj.get("assert")
     for expect_assert in convert_to_list_if_need(asserts):
         try:
@@ -82,6 +88,7 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, result, **kw
     test_name = kwargs.get("test_name")
     result[phase_name] = {"expect_to_fail": expect_to_fail}
     failed_expection = False
+    _print_x(f"  Calling '{phase_name}', expect to fail: '{expect_to_fail}'")
     try:
         func(cmd, test_cobj, test_name, expect_obj)
         if expect_to_fail:
@@ -104,12 +111,16 @@ def _phase_cordinator(cmd, test_cobj, func, phase_name, expect_obj, result, **kw
         try:
             de_provision(cmd, test_cobj)
         except CLIError as error:
-            _LOGGER.warning("Failed to clean up %s, %s", test_name, error)
+            _print_x(f"  Failed to cleanup '{test_name}' {str(error)}")
+            _LOGGER.warning("Failed to clean up %s, %s", test_name, str(error))
     elif failed_expection and down_strategy == "always" and phase_name == "de-provisioning":
+        _print_x(f"  Failed to cleanup '{test_name}' {str(result[phase_name]['msg'])}")
         _LOGGER.warning("Failed to clean up %s, %s", test_name, str(result[phase_name]["msg"]))
 
     if exit_on_error and failed_expection:
+        _print_x(f"  Exiting test '{test_name}' since exit on error is set. ")
         raise CLIError(f"test '{test_name}' failed with msg '{result.get('msg', '')}")
+    _print_x(f"  '{phase_name}' failed: {result[phase_name]['failed']}, expected to fail: {expect_to_fail}, Msg: '{result[phase_name]['msg']}'")
 
 
 def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_strategy):
@@ -132,7 +143,6 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
         hook_object = [{CONFIG_NAME: f"hook {hook}", "fail_override": expect_obj.get("fail", False), "func": _run_hook},
                        {CONFIG_NAME: f"hook {hook} expect", "fail_override": False, "func": _run_expect_tests}]
         for i in hook_object:
-            _phase_cordinator(cmd, test_cobj, i["func"], i[CONFIG_NAME], expect_obj, result, test_name=test_name, exit_on_error=exit_on_error, down_strategy=down_strategy, fail=i["fail_override"])
             if result["failed"]:
                 return
 
@@ -147,57 +157,108 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
         _phase_cordinator(cmd, test_cobj, i["func"], i[CONFIG_NAME], expect_obj, result, test_name=test_name, exit_on_error=exit_on_error, down_strategy=down_strategy, fail=i["fail_override"])
         if result["failed"]:
             return
-
     # Run post test life cycle
     run_hook_lifecycle(test_cobj, LIFECYCLE_POST_TEST)
 
 
-def _manage_git_upgrade():
-    pass
+# git fetch tags --all
+# git show HEAD~3 --pretty=format:"%H" --quiet
+# git --no-pager tag --sort=-creatordate
+#  git rev-list -n 1 $TAG
+def _run_git(args=None, cwd=None):
+    return run_command("git", args=args, interactive=False, cwd=cwd)[0]
 
 
-def _prepera_upgrade(upgrade_path, config, working_dir, test_name, prefix):
-    override_config = {CONFIG_STATE_FILENAME: f"test_{prefix}_{test_name}_state.json"}
-    if upgrade_path.get("from_expect") is None:
-        return ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
+def _manage_git_upgrade(upgrade_config, tmp_dir, prefix_test, reuse_dir=True):
+    git_config = upgrade_config.get("git")
+    repo_name = git_config.get("repo")
+    repo_dir_path = os.path.join(tmp_dir, prefix_test)
+    if reuse_dir:
+        repo_dir_path = os.path.join(tmp_dir, str(base64.urlsafe_b64encode(repo_name.encode("utf-8")), "utf-8"))
+
+    if not dir_exists(repo_dir_path):
+        _run_git(args=["clone", repo_name, repo_dir_path])  # clone
+
+    _run_git(args=["fetch", "--all"], cwd=repo_dir_path)  # fetch all
+    if git_config.get("branch", False):
+        branch = git_config.get("branch")
+        if "~" in branch:
+            #       compute right tag
+            pass
+        else:
+            _run_git(args=["checkout", branch], cwd=repo_dir_path)
+            _run_git(args=["pull"], cwd=repo_dir_path)
+    elif git_config.get("tag", False):
+        tag = git_config.get("tag")
+        if "~" in tag:
+            #       compute right tag
+            pass
+        _run_git(args=["checkout", tag], cwd=repo_dir_path)
+        return repo_dir_path
+    elif git_config.get("commit", False):
+        commit = git_config.get("commit")
+        _run_git(args=["checkout", commit], cwd=repo_dir_path)
+    else:
+        raise CLIError(f"No branch, commit, or tag defined. in {upgrade_config['name']}")
+    return repo_dir_path
+
+
+def _prepera_upgrade(cmd, upgrade_config, config, working_dir, test_name, prefix):
+    override_config = {CONFIG_STATE_FILEPATH: "file://{{ cdf.tmp_dir }}/test_" + f"{prefix}_{test_name}_state.json"}
+    test_cobj = ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
+    upgrade_test = upgrade_config.get("from_expect")
+    if upgrade_test is None:
+        return test_cobj
     # Need to provision
-    test_cobj = None
-    if upgrade_path.get("type") == "local":
-        # change working dir, override tmp file
-        test_cobj = ConfigParser(config, remove_tmp=False, working_dir=working_dir, test=test_name, override_config=override_config)
-    elif upgrade_path.get("type") == "git":
-        pass
+    override_config["name"] = test_cobj.name
+    override_config["resource_group"] = test_cobj.resource_group_name
+    override_config["tmp_dir"] = test_cobj.tmp_dir
+
+    if upgrade_config.get(CONFIG_TYPE) == "local":
+        upgrade_location = upgrade_config.get("path")
+    elif upgrade_config.get(CONFIG_TYPE) == "git":
+        upgrade_location = _manage_git_upgrade(upgrade_config, test_cobj.tmp_dir, f"{prefix}_{test_name}", reuse_dir=True)
+
+    upgrade_cobj = ConfigParser(config, remove_tmp=False, working_dir=upgrade_location, test=upgrade_test, override_config=override_config)
+    _print_x(f"  Upgrade provisioning initial state {prefix}_{upgrade_test}")
+    # TODO replace with _phase_cordinator to handle if provisioning fail
+    _run_provision(cmd, upgrade_cobj, None, None)
     # change back working dir
     return test_cobj
 
 
-def _upgrade_matrix(cobj, upgrade_strategy):
+def _upgrade_matrix(cobj, global_upgrade_strategy, test_name):
     matrix = []
-    if upgrade_strategy in ("all", "fresh"):
+    test_upgrade_strategy = cobj.get_test(test_name).get("upgrade_strategy", "all")
+    if global_upgrade_strategy in ("all", "fresh") and test_upgrade_strategy in ("all", "fresh"):
         matrix.append({CONFIG_NAME: "fresh", "from_expect": None})
-    if upgrade_strategy in ("all", "upgrade"):
-        matrix = matrix + cobj.upgrade_flaten
+    if global_upgrade_strategy in ("all", "upgrade") and test_upgrade_strategy in ("all", "upgrade"):
+        matrix = matrix + cobj.upgrade_flaten(test_name)
     return matrix
 
 
-# pylint: disable=W0613
 def run_test(cmd, cobj, config, exit_on_error, test_args, working_dir, down_strategy, upgrade_strategy):
     """ test handler function. Run all tests or specific ones """
 
     results = {}
     cobj.state.transition_to_phase(STATE_PHASE_TESTING)
-    for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy):
-        prefix = upgrade_obj[CONFIG_NAME]
-        upgrade_title = f"'{upgrade_obj['name']}'"
-        if upgrade_obj['from_expect']:
-            prefix = f"{upgrade_obj['name']}_{upgrade_obj.get('from_expect')}"
-            upgrade_title = f"'{upgrade_obj['name']}' from '{upgrade_obj['from_expect']}'"
-        results[prefix] = {}
-        for test_name in test_args:
-            print(f"Running test: '{test_name}' upgrade path: {upgrade_title}")
+    _print_x(f"Test configuration, exit on error: '{exit_on_error}', down strategy: '{down_strategy}', upgrade strategy: '{upgrade_strategy}'")
+    for test_name in test_args:
+        for upgrade_obj in _upgrade_matrix(cobj, upgrade_strategy, test_name):
+            prefix = upgrade_obj[CONFIG_NAME]
+            upgrade_title = f"'{upgrade_obj['name']}'"
+            if upgrade_obj['from_expect']:
+                prefix = f"{upgrade_obj['name']}_{upgrade_obj.get('from_expect')}"
+                upgrade_title = f"'{upgrade_obj['name']}' from '{upgrade_obj['from_expect']}'"
+            if prefix not in results:
+                results[prefix] = {}
+
             results[prefix][test_name] = {"failed": False}
-            test_cobj = _prepera_upgrade(upgrade_obj, config, working_dir, test_name, prefix)  # not sure about logic
+            _print_x(f"Starting test: '{test_name}', upgrade path: {upgrade_title}")
+            test_cobj = _prepera_upgrade(cmd, upgrade_obj, config, working_dir, test_name, prefix)  # not sure about logic
             _run_single_test(cmd, test_cobj, results[prefix][test_name], test_name, exit_on_error, down_strategy)
         # TODO write tests to state
     cobj.state.transition_to_phase(STATE_PHASE_TESTED)
     return results
+
+# pylint disable=W0613

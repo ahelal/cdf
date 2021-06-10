@@ -43,6 +43,9 @@ expect:
     - az:
         assert:
           - "{{ cdf.name | lower in hooks.az.show.stdout| lower }}"
-# TODO
-# CMD
-# script
+    - cmd:
+        assert:
+          - "{{ 'A=stdoutB=stderrC=print' ==  hooks.cmd.print.stdout.replace('\n','') }}"
+    - script:
+        assert:
+          - "{{ 'eastus2' in include_file(cdf.tmp_dir + '/script.txt') }}"

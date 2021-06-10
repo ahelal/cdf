@@ -15,7 +15,7 @@ import yaml
 from knack.log import get_logger
 from knack.util import CLIError
 import azure.cli.core.commands.progress as progress
-from azext_cdf._def import CONFIG_STATE_FILEPATH, CONFIG_STATE_FILENAME
+from azext_cdf._def import CONFIG_STATE_FILEPATH
 # from azext_cdf.parser import ConfigParser
 
 _LOGGER = get_logger(__name__)
@@ -63,16 +63,15 @@ class Progress():
 
 
 # TODO should be refactored into parser code
-def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None):
+def init_config(config, config_parser, remove_tmp=False, working_dir=None, state_file=None, state_locking=True):
     ''' return config obj and cwd'''
     cwd = os.getcwd()
     override_config = {}
     if state_file:
         override_config = {
-            CONFIG_STATE_FILENAME: os.path.basename(state_file),
-            CONFIG_STATE_FILEPATH: f"file://{os.path.dirname(state_file)}",
+            CONFIG_STATE_FILEPATH: f"file://{state_file}",
         }
-    return config_parser(cdf_yml_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config), cwd
+    return config_parser(config_filepath=config, remove_tmp=remove_tmp, test=None, working_dir=working_dir, override_config=override_config, state_locking=state_locking), cwd
 
 
 def real_dirname(dir_path):
@@ -116,6 +115,8 @@ def dir_remove(filepath):
 def dir_change_working(dirpath):
     ''' Change working directory '''
 
+    if dirpath is None:
+        dirpath = os.getcwd()
     abs_path = os.path.realpath(dirpath)
     if not abs_path:
         raise CLIError(f"Invalid working directory supplied {abs_path}")
@@ -335,10 +336,32 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
         stderr = process.stderr.decode('utf-8')
         process.check_returncode()
         return stdout, stderr
-    except subprocess.CalledProcessError as error:
+    except (subprocess.CalledProcessError, FileNotFoundError) as error:
         context = f"Run command error. {str(error)}"
         if stdout:
             context = f"{context} stdout:{stdout}"
         if stderr:
             context = f"{context} stdout:{stderr}"
         raise CLIError(context) from error
+
+# class Colors:
+#     ''' Colors '''
+#     HEADER = '\033[95m'
+#     OK_BLUE = '\033[94m'
+#     OK_CYAN = '\033[96m'
+#     OK_GREEN = '\033[92m'
+#     WARNING = '\033[93m'
+#     FAIL = '\033[91m'
+#     END_C = '\033[0m'
+#     BOLD = '\033[1m'
+#     UNDERLINE = '\033[4m'
+
+# def p_color(message, enabled=True, color=None):
+#     ''' Print color message '''
+
+#     if not enabled:
+#         return
+#     if not color:
+#         print(message)
+#         return
+#     print(f"{color}{message}{Colors.END_C}")

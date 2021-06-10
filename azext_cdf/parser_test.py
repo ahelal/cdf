@@ -4,15 +4,27 @@ import unittest
 import shutil
 import os
 import platform
-import json
 
 from mock import patch
 from knack.util import CLIError
 from azext_cdf.parser import ConfigParser
 from azext_cdf.version import VERSION
-from azext_cdf._supporter_test import BasicParser
+from azext_cdf._supporter_test import BasicParser, assert_state
 
+
+# class BasicParser(unittest.TestCase):
+#     def setUp(self):
+#         self.dirpath = tempfile.mkdtemp()
+#         self.config = {"name": "cdf_simple", "resource_group": "rg", "location": "loc"}
+#         self.config['tmp_dir'] = self.dirpath
+#         self.state_file = f"{self.dirpath}/{''.join(random.sample(string.ascii_lowercase, 25))}.json"
+#         self.override_config = {
+#             CONFIG_STATE_FILEPATH: f"file://{self.state_file}",
+#         }
+#     def tearDown(self):
+#         shutil.rmtree(self.dirpath)
 # pylint: disable=C0111
+
 class SimpleParser(BasicParser):
     @patch.object(ConfigParser, '_read_config')
     def test_min_default(self, mock_read_config):
@@ -33,10 +45,8 @@ class SimpleParser(BasicParser):
         self.assertEqual(parser.tests, [])
         self.assertEqual(parser.get_hooks(format_list=True), [])
         self.assertEqual(list(parser.get_hooks(format_list=False)), [])
-        self.assertTrue(os.path.exists(default_state_file))
-        with open(default_state_file) as json_file:
-            data = json.load(json_file)
-            self.assertEqual(data['name'], self.config["name"])
+        assert_state(self, default_state_file, {"name": self.config["name"]})
+
 
     @patch.object(ConfigParser, '_read_config')
     def test_no_default(self, mock_read_config):
@@ -59,7 +69,7 @@ class PathsParser(BasicParser):
         parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_config=self.override_config)
         self.assertEqual(parser.name, self.config["name"])
         self.assertEqual(parser.config_dir, f"{os.getcwd()}/path_a/path_b")  # relative path
-        self.assertTrue(os.path.exists(self.state_file))
+        assert_state(self, self.state_file, {"name": self.config["name"]})
 
     @patch.object(ConfigParser, '_read_config')
     def test_abs_path_config(self, mock_read_config):
@@ -68,7 +78,7 @@ class PathsParser(BasicParser):
         parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_config=self.override_config)
         self.assertEqual(parser.name, self.config["name"])
         self.assertEqual(parser.config_dir, f"{os.getcwd()}/path_a/path_b")  # abs path
-        self.assertTrue(os.path.exists(self.state_file))
+        assert_state(self, self.state_file, {"name": self.config["name"]})
 
 class InterpolateParser(BasicParser):
     @patch.object(ConfigParser, '_read_config')
@@ -77,7 +87,6 @@ class InterpolateParser(BasicParser):
         # self.config["vars"] = {"cdf_builtin":"{{cdf.name}}_{{cdf.resource_group}}_{{cdf.location}}"}
         mock_read_config.return_value = self.config
         parser = ConfigParser("path_a/path_b/c.yml", remove_tmp=False, override_config=self.override_config)
-        # interpolate_txt = parser.interpolate(1, "{{cdf.name}}.{{cdf.resource_group}}.{{cdf.location}}", context="test", extra_vars=None, raw_undefined_error=False)
         self.assertEqual(parser.interpolate(1, "{{cdf.name}}.{{cdf.resource_group}}.{{cdf.location}}"), "cdf_test_first_stage.rg.loc")
         self.assertEqual(parser.interpolate(1, "{{cdf.config_dir}}"), f"{os.getcwd()}/path_a/path_b")
         self.assertEqual(parser.interpolate(1, "{{cdf.tmp_dir}}"), self.dirpath)

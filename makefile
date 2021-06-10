@@ -7,6 +7,8 @@ EXTENTION_NAME := cdf
 
 source-venv: $(VENV)/bin/activate
 test: test-lint test-unit test-integration
+test-integration: test-integration-code test-integration-bicep test-integration-terraform test-integration-arm
+
 venv:
 	python3 -m venv $(VENV)
 	pip3 install -r dev-requirements.txt
@@ -23,6 +25,7 @@ install: build uninstall
 docker-build:
 	@echo "VERSION: $$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)"
 	docker build -t cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs) .
+
 docker-run:
 	docker run -v $$(pwd):/cdf -it cdf:$$(cat azext_cdf/version.py | grep VERSION | cut -d "=" -f2| xargs)
 
@@ -43,10 +46,30 @@ test-unit:
 	# python3 -m unittest discover -s azext_cdf -p '*_test.py' -v
 	pytest -v azext_cdf --color=yes --code-highlight=yes
 
-test-integration:
+test-integration-code:
 	pytest -v tests --color=yes --code-highlight=yes -s
+
+test-integration-arm:
 	@echo "running expect default test"
-	az cdf test -w ./tests/fixtures/bicep/ --down-strategy=always default 
+	az cdf up -w ./tests/fixtures/arm/v2 
+	az cdf status -w ./tests/fixtures/arm/v2 
+	az cdf hook -w ./tests/fixtures/arm/v2 pass
+	az cdf down -y -w ./tests/fixtures/arm/v2
+	az cdf test -w ./tests/fixtures/arm/v2
+
+test-integration-bicep:
+	@echo "running expect default test"
+	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default
+# also use cd instead of -w 
+	@echo "running expect expect_to_fail_and_fails test"
+	@cd ./tests/fixtures/bicep/v2 && az cdf test expect_to_fail_and_fails
+
+test-integration-terraform:
+	@echo "running expect terraform test"
+	az cdf test -w ./tests/fixtures/terraform/v2/ --down-strategy=always
+
+test-clean:
+	find . -type d -iname foo -delete
 
 clean:
 	rm -rf build
