@@ -49,6 +49,11 @@ test-unit:
 test-integration-code:
 	pytest -v tests --color=yes --code-highlight=yes -s
 
+test-integration-arm:
+#TODO
+	@echo "running expect default test"
+	az cdf test -w ./tests/fixtures/bicep/v2 
+
 test-integration-bicep:
 	@echo "running expect default test"
 	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default
@@ -58,7 +63,6 @@ test-integration-bicep:
 
 test-integration-terraform:
 	@echo "running expect terraform test"
-	env
 	az cdf test -w ./tests/fixtures/terraform/v2/ --down-strategy=always
 
 test-clean:
