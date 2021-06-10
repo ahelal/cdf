@@ -1,5 +1,7 @@
 # CDF
 
+![CDF workflow](https://github.com/ahelal/cdf/actions/workflows/python.yml/badge.svg)
+
 ## Overview
 
 CDF is an Azure CLI plugin that will make your life easier to develop, test, maintain, share units, and run IaC code in Azure. currently supports IaC `ARM`, `bicep` and `terraform`.
@@ -260,3 +262,7 @@ To avoid any potential credentials leakage you should git ignore the entire `cdf
 `az cdf --help`
 
 Check the examples https://github.com/ahelal/cdf-examples
+
+## TODO 
+
+Check https://github.com/ahelal/cdf/blob/main/TODO.md
