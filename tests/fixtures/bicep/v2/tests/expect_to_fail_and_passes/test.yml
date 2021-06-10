@@ -1,4 +1,0 @@
-description: "Expect the test to fail but passes"
-expect:
-  up:
-    fail: true

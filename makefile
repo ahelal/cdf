@@ -54,11 +54,7 @@ test-integration-bicep:
 	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default
 # also use cd instead of -w 
 	@echo "running expect expect_to_fail_and_fails test"
-	@cd ./tests/fixtures/bicep/v2
-	az cdf test expect_to_fail_and_fails
-	@cd ../../../../
-	@echo "running expect expect_to_fail_and_passes test"
-	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always expect_to_fail_and_passes
+	@cd ./tests/fixtures/bicep/v2 && az cdf test expect_to_fail_and_fails
 
 test-integration-terraform:
 	@echo "running expect terraform test"
