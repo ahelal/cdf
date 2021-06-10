@@ -195,4 +195,3 @@ def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, s
                 _LOGGER.warning(test)
     if one_test_failed:
         raise CLIError(f"At-least on test failed in the following upgrades paths: {set(upgrade_failed)}")
-    return {}
