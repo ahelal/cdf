@@ -94,11 +94,12 @@ def _de_provision(cmd, cobj):
         _empty_deployment(cmd, cobj)
     elif cobj.provisioner == "terraform":
         # Run template interpolate
-        run_terraform_destroy(
+        _run_terraform_destroy(
             deployment_name=cobj.name,
             terraform_dir=find_the_right_dir(cobj.up_location, cobj.config_dir),
             tmp_dir=cobj.tmp_dir,
-            params=cobj.data[CONFIG_PARAMS],
+            bin_path=cobj.provisioner_path,
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False
         )
     cobj.state.set_result(outputs={}, resources={}, flush=True)
@@ -131,38 +132,39 @@ def _provision(cmd, cobj):
 
     output_resources, outputs = None, None
     if cobj.provisioner == "bicep":
-        output_resources, outputs = run_bicep(
+        output_resources, outputs = _run_bicep(
             cmd,
             deployment_name=cobj.name,
             bicep_file=find_the_right_file(cobj.up_location, "bicep", "*.bicep", cobj.config_dir),
             tmp_dir=cobj.tmp_dir,
             resource_group=cobj.resource_group_name,
-            params=cobj.data[CONFIG_PARAMS],
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False,
             complete_deployment=cobj.deployment_mode,
         )
     elif cobj.provisioner == "arm":
-        output_resources, outputs = run_arm_deployment(
+        output_resources, outputs = _run_arm_deployment(
             cmd,
             deployment_name=cobj.name,
             arm_template_file=find_the_right_file(cobj.up_location, "arm", "*.json", cobj.config_dir),
             resource_group=cobj.resource_group_name,
-            params=cobj.data[CONFIG_PARAMS],
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False,
             complete_deployment=cobj.deployment_mode,
         )
     elif cobj.provisioner == "terraform":
-        output_resources, outputs = run_terraform_apply(
+        output_resources, outputs = _run_terraform_apply(
             deployment_name=cobj.name,
             terraform_dir=find_the_right_dir(cobj.up_location, cobj.config_dir),
             tmp_dir=cobj.tmp_dir,
-            params=cobj.data[CONFIG_PARAMS],
+            bin_path=cobj.provisioner_path,
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False
         )
     cobj.state.set_result(outputs=outputs, resources=output_resources, flush=True)
 
 
-def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, params=None, no_prompt=False, complete_deployment=False):
+def _run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, params=None, no_prompt=False, complete_deployment=False):
     '''
     Deploy an bicep files
     Returns:
@@ -173,7 +175,7 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, params=
     _LOGGER.debug(" Building bicep file in tmp dir %s", arm_template_file)
     build_bicep_file(cmd, bicep_file, outfile=arm_template_file)
 
-    return run_arm_deployment(
+    return _run_arm_deployment(
         cmd,
         deployment_name=deployment_name,
         arm_template_file=arm_template_file,
@@ -198,7 +200,7 @@ def check_deployment_error(cmd, resource_group_name, deployment_name, deployment
     return deployment_status
 
 
-def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
+def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
     """
     Deploy an ARM template
     Returns:
@@ -222,11 +224,11 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
     return deployment.result().as_dict().get("properties", {}).get("output_resources", {}), deployment.result().as_dict().get("properties", {}).get("outputs", {})
 
 
-def run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, no_prompt=False):
+def _run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, bin_path="terraform", no_prompt=False):
     ''' Run terraform apply '''
     # TODO fix return
     _run_terraform_cmd(deployment_name, "apply", terraform_dir, tmp_dir, params=params, no_prompt=no_prompt)
-    stdout, _ = run_command("terraform", args=["output", f"-state={tmp_dir}/{deployment_name}.tfstate", "-json"], interactive=False, cwd=terraform_dir)
+    stdout, _ = run_command(bin_path, args=["output", f"-state={tmp_dir}/{deployment_name}.tfstate", "-json"], interactive=False, cwd=terraform_dir)
     try:
         output = json.loads(stdout)
     # except subprocess.CalledProcessError as error:
@@ -235,19 +237,19 @@ def run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, no
     return {}, output
 
 
-def run_terraform_destroy(deployment_name, terraform_dir, tmp_dir, params=None, no_prompt=False):
+def _run_terraform_destroy(deployment_name, terraform_dir, tmp_dir, bin_path, params=None, no_prompt=False):
     ''' Run terraform destroy '''
-    return _run_terraform_cmd(deployment_name, "destroy", terraform_dir, tmp_dir, params=params, no_prompt=no_prompt)
+    return _run_terraform_cmd(deployment_name, "destroy", terraform_dir, tmp_dir, bin_path=bin_path, params=params, no_prompt=no_prompt)
 
 
-def _run_terraform_cmd(deployment_name, terraform_cmd, terraform_dir, tmp_dir, params=None, no_prompt=False):
+def _run_terraform_cmd(deployment_name, terraform_cmd, terraform_dir, tmp_dir, bin_path="terraform", params=None, no_prompt=False):
     varsfile = os.path.join(tmp_dir, "terraformvars.json")
     if params:
         json_write_to_file(varsfile, params)
 
-    run_command("terraform", args=["init"], interactive=False, cwd=terraform_dir)
+    run_command(bin_path, args=["init"], interactive=False, cwd=terraform_dir)
     args = [terraform_cmd, f"-input={no_prompt}", f"-state={tmp_dir}/{deployment_name}.tfstate", "-auto-approve", "-no-color"]
     if params:
         args.append("-var-file")
         args.append(varsfile)
-    return run_command("terraform", args=args, interactive=False, cwd=terraform_dir)
+    return run_command(bin_path, args=args, interactive=False, cwd=terraform_dir)
