@@ -2,6 +2,7 @@
 name: "ssh_b_{{ store('postfix', random_string(5, 'lower')) }}"
 resource_group: "cdf_bicep_{{cdf.name}}"
 location: "eastus2"
+complete_deployment: true
 
 vars:
   log_file: "{{cdf.tmp_dir}}/hook_log.txt"
@@ -10,7 +11,7 @@ vars:
 params:
   name: "{{cdf.name}}_key"
   location: "{{cdf.location}}"
-  key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrs/zJhwDvfjcmXiwlabkZMs7qjA0hl9c3RXBpWYQx2Ps/lhN/I043LsU1zAFPg9P5qaqzVjc73Zky2tZ8qVFKuHAUV8ccwLEwuvWmeqFTK5of6Dt/fuWRbCfpZDcq1nqp+v9bG+OhdNhOUMJFCbFWpHpAP95IOSo9YXeFLdegqMEm8zzgKojYE7RVrrejejmhZcoRMNZj4pxPk/FTqVoTR4C5lzZMBR0XLY/kzq4ay/LfAKyJ+EaNOeFOv/pCIw69DqBDqLiMUwHJLmGkw9azdT6FBXIQhhfeEilItQzfOnzTOh87Xvhv/z0fuhPynUbT6KWX0GO5oTRXE5Xf+TGR"
+  key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYOHP78UHR8LA9CVn/bX2r33KAQnu+4u6GcQLe7PAK8OUc2twWxQxcwfHyJY0Q8G+y8Z4tGgwuc8WxoaBhSN0ROA7KHEwrulgIHinme/7gJzBJE8avImsKKFrCtFDejKHrvY9vRrEKH72NX5y/+dSfhAGitPTCZdBcYJRVsfgfhr2OxACdf8odnZfhxiXN+s5sIzVCqh+h75plJcMeUeuOwfePKNF1p6r8Tz/UUKIyDZiPJ8vkwYH0bcjCc0FhpsK7thUXyNaBKyhCxW9D2fj4nC4SjzeJ1eG7zmaCUn4ZVuO+tSCWj4lvW+FCp1z1Xfv5pGOMkeedj9tvmag2vmzL hello1"
   lang: "{{vars.lang}}"
   extra: "{{vars.extra | default('default') }}"
 

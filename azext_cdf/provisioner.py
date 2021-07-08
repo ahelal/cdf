@@ -5,7 +5,7 @@ import os
 from knack.util import CLIError
 from knack.log import get_logger
 from azure.cli.command_modules.resource.custom import get_deployment_at_resource_group
-from azure.cli.command_modules.resource.custom import build_bicep_file
+from azure.cli.command_modules.resource.custom import build_bicep_file, what_if_deploy_arm_template_at_resource_group
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, delete_resource, show_resource
 from azure.cli.core.commands.client_factory import get_subscription_id
 from azure.core.exceptions import ResourceNotFoundError
@@ -200,14 +200,7 @@ def check_deployment_error(cmd, resource_group_name, deployment_name, deployment
     return deployment_status
 
 
-def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
-    """
-    Deploy an ARM template
-    Returns:
-        output_resources
-        output
-    """
-
+def _prepare_arm_deployment(params, complete_deployment):
     parameters = []
     for key, value in params.items():
         params_obj = [f"{key}={value}"]
@@ -217,7 +210,84 @@ def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group,
         mode = "Complete"
     else:
         mode = "Incremental"
+    return parameters, mode
 
+
+def _run_arm_what_if(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
+    parameters, mode = _prepare_arm_deployment(params, complete_deployment)
+    wif = what_if_deploy_arm_template_at_resource_group(cmd=cmd,
+                                                        resource_group_name=resource_group,
+                                                        template_file=arm_template_file,
+                                                        deployment_name=deployment_name,
+                                                        mode=mode,
+                                                        no_prompt=no_prompt,
+                                                        no_pretty_print=True,
+                                                        parameters=parameters)
+    plan = {"create": 0, "delete": 0, "deploy": 0, "ignore": 0, "modify": 0, "nochange": 0, "unsupported": 0}
+    # wif.status == 'Succeeded'
+    # wif.error = None
+    # https://docs.microsoft.com/en-us/rest/api/resources/deployments/what-if
+
+    for change in wif.changes:
+        # TODO
+        # print("change", change)
+        plan[change.change_type.lower()] += 1
+        # if y.delta:
+        #     for x in y.delta:
+        #         print("-/+/~", x)
+        # print("______________________________")
+    return plan
+
+
+def _run_terraform_plan(deployment_name, terraform_dir, tmp_dir, params=None, bin_path="terraform", no_prompt=False):
+    # TODO
+    _run_terraform_cmd(deployment_name,
+                       "plan",
+                       terraform_dir,
+                       tmp_dir,
+                       params=params,
+                       bin_path=bin_path,
+                       auto_approve=False,
+                       no_prompt=no_prompt,
+                       extra_args=["-out", f"{tmp_dir}/{deployment_name}_plan.json"])
+    stdout, _ = run_command(bin_path, args=["show", "-json", f"{tmp_dir}/{deployment_name}_plan.json"], interactive=False, cwd=terraform_dir)
+    try:
+        output = json.loads(stdout)
+    # except subprocess.CalledProcessError as error:
+    except json.JSONDecodeError as error:
+        raise CLIError(f"Error while decoding json from terraform show. Error: {error}") from error
+    plan = {"create": 0, "delete": 0, "modify": 0, "nochange": 0}
+    map_to_name = {"update": "modify", "delete": "delete", "no-op": "nochange", "create": "create"}
+    for change in output.get("resource_changes", []):
+        # print("---| change", change)
+        for change_type in change["change"]["actions"]:
+            # print("---", map_to_name[change_type])
+            # if change_type == "update":
+            #     change_type = "modify"
+            # elif change_type == "destroy":
+            #     change_type = "delete"
+            # elif change_type == "no-op":
+            #     change_type = "nochange"
+            plan[map_to_name[change_type]] += 1
+    return plan
+
+
+def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
+    """
+    Deploy an ARM template
+    Returns:
+        output_resources
+        output
+    """
+    # TODO only run terraform whatif if we have plan
+    _run_arm_what_if(cmd,
+                     deployment_name=deployment_name,
+                     arm_template_file=arm_template_file,
+                     resource_group=resource_group,
+                     params=params,
+                     no_prompt=False,
+                     complete_deployment=complete_deployment)
+    parameters, mode = _prepare_arm_deployment(params, complete_deployment)
     deployment = deploy_arm_template_at_resource_group(
         cmd, resource_group_name=resource_group, template_file=arm_template_file, deployment_name=deployment_name, mode=mode, no_prompt=no_prompt, parameters=parameters, no_wait=False
     )
@@ -226,6 +296,8 @@ def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group,
 
 def _run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, bin_path="terraform", no_prompt=False):
     ''' Run terraform apply '''
+    # TODO run terraform plan only if we have plan
+    _run_terraform_plan(deployment_name, terraform_dir, tmp_dir, params=params, bin_path="terraform", no_prompt=False)
     # TODO fix return
     _run_terraform_cmd(deployment_name, "apply", terraform_dir, tmp_dir, params=params, no_prompt=no_prompt)
     stdout, _ = run_command(bin_path, args=["output", f"-state={tmp_dir}/{deployment_name}.tfstate", "-json"], interactive=False, cwd=terraform_dir)
@@ -242,14 +314,18 @@ def _run_terraform_destroy(deployment_name, terraform_dir, tmp_dir, bin_path, pa
     return _run_terraform_cmd(deployment_name, "destroy", terraform_dir, tmp_dir, bin_path=bin_path, params=params, no_prompt=no_prompt)
 
 
-def _run_terraform_cmd(deployment_name, terraform_cmd, terraform_dir, tmp_dir, bin_path="terraform", params=None, no_prompt=False):
+def _run_terraform_cmd(deployment_name, terraform_cmd, terraform_dir, tmp_dir, bin_path="terraform", params=None, no_prompt=False, auto_approve=True, extra_args=False):
     varsfile = os.path.join(tmp_dir, "terraformvars.json")
     if params:
         json_write_to_file(varsfile, params)
 
     run_command(bin_path, args=["init"], interactive=False, cwd=terraform_dir)
-    args = [terraform_cmd, f"-input={no_prompt}", f"-state={tmp_dir}/{deployment_name}.tfstate", "-auto-approve", "-no-color"]
+    args = [terraform_cmd, f"-input={no_prompt}", f"-state={tmp_dir}/{deployment_name}.tfstate", "-no-color"]
+    if auto_approve:
+        args.append("-auto-approve")
     if params:
         args.append("-var-file")
         args.append(varsfile)
+    if extra_args:
+        args += extra_args
     return run_command(bin_path, args=args, interactive=False, cwd=terraform_dir)

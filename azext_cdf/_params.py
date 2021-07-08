@@ -12,6 +12,11 @@ def load_arguments(self, _):
         context.argument("force", options_list=["--force", "-f"], help="force overwrite of files", default=False)
         context.argument("example", options_list=["--example", "-e"], help="create a demo files", default=False)
 
+    with self.argument_context("cdf debug spec") as context:
+        context.argument("test_ext", options_list=["--test-extension", "-e"], help="file extension to filter files with", default=None)
+        context.argument("test_files", options_list=["--test-files", "-f"], help="files to run the test on", default=None)
+        context.argument("test_bin", options_list=["--bin", "-b"], help="Binary to use for running tests")
+
     with self.argument_context("cdf up") as context:
         context.argument("prompt", options_list=["--ask", "-a"], help="Ask interactively for missing parameters if any", default=False)
         context.argument("remove_tmp", options_list=["--remove-dir", "-r"], help="Remove temporary directory content and recreate the dir", default=False)

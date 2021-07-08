@@ -57,6 +57,11 @@ class Progress():
             return
         self.controller.stop()
 
+    def add(self, message=None):  # pylint: disable=W0613
+        ''' add message '''
+        if self.pseudo:
+            return
+
     def update_progress(self):
         ''' NoOps '''
         return
@@ -315,7 +320,7 @@ def dict_lookup(dictionary, keys):
         return None
 
 
-def run_command(bin_path, args=None, interactive=False, cwd=None):
+def run_command(bin_path, args=None, interactive=False, cwd=None, env=None):
     """
     Run CLI commands
     Returns: stdout, stderr  strings
@@ -331,7 +336,12 @@ def run_command(bin_path, args=None, interactive=False, cwd=None):
         if interactive:
             subprocess.check_call(cmd_args, cwd=cwd)
             return "", ""
-        process = subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=False)
+        current_env = os.environ.copy()
+        if env:
+            for k_env in env:
+                current_env[k_env] = env[k_env]
+
+        process = subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=False, env=current_env)
         stdout = process.stdout.decode('utf-8')
         stderr = process.stderr.decode('utf-8')
         process.check_returncode()

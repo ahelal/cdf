@@ -1,15 +1,16 @@
 """ Tester  file """
 
 import os
-import shlex
+import glob
 import base64
+import sys
 from distutils.util import strtobool
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg, dir_exists
+from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg, dir_exists, file_exists
 from azext_cdf.parser import ConfigParser
 from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME
-from azext_cdf._def import CONFIG_TYPE, CONFIG_STATE_FILEPATH
+from azext_cdf._def import CONFIG_TYPE, CONFIG_STATE_FILEPATH, CONFIG_EXPECT_RUNNER, CONFIG_EXPECT_RUNNER_CMD, CONFIG_EXPECT_RUNNER_FILES, CONFIG_EXPECT_RUNNER_EXTENSION
 from azext_cdf.hooks import run_hook_lifecycle
 from azext_cdf.provisioner import de_provision, provision, run_command
 from azext_cdf.hooks import run_hook
@@ -39,13 +40,12 @@ def _run_de_provision(cmd, cobj, _, __):
 
 def _run_expect_tests(_, cobj, test_name, expect_obj):
     errors = []
-    # run commands
-    expect_cmds = expect_obj.get("cmd")
-    for expect_cmd in convert_to_list_if_need(expect_cmds):
-        try:
-            _expect_cmd_exec(cobj, test_name, expect_cmd)
-        except CLIError as error:
-            errors.append(f"expect cmd failed '{expect_cmd}'. Error: '{error}'")
+    # run runner
+    expect_runner = expect_obj.get(CONFIG_EXPECT_RUNNER)
+    try:
+        expect_runner_exec(cobj, test_name, expect_runner)
+    except CLIError as error:
+        errors.append(f"expect runner failed '{expect_runner}'. Error: '{error}'")
     # run asserts
     asserts = expect_obj.get("assert")
     for expect_assert in convert_to_list_if_need(asserts):
@@ -57,11 +57,79 @@ def _run_expect_tests(_, cobj, test_name, expect_obj):
         raise CLIError(errors)
 
 
-def _expect_cmd_exec(cobj, test_name, expect_cmd):
+def expect_runner_exec(cobj, test_name, expect_runner):
+    ''' main expect runner function'''
+
+    if expect_runner is None:
+        return
     cobj.interpolate_delayed_variable()
-    expect_cmds_interpolated = cobj.interpolate(phase=2, template=expect_cmd, context=f"test '{test_name}' cmd interpolation '{expect_cmd}'")
-    expect_cmds_interpolated = shlex.split(expect_cmds_interpolated)
-    return run_command(expect_cmds_interpolated[0], expect_cmds_interpolated[1:], interactive=False)
+    cmd = expect_runner.get(CONFIG_EXPECT_RUNNER_CMD, None)
+    if cmd is None:
+        return
+    cmd = cobj.interpolate(phase=2, template=cmd, context=f"test '{test_name}' expect runner cmd interpolation '{cmd}'")
+    cmd = convert_to_shlex_arg(cmd)
+    # files
+    files = expect_runner.get(CONFIG_EXPECT_RUNNER_FILES, None)
+    files = cobj.interpolate(phase=2, template=files, context=f"test '{test_name}' expect runner files interpolation '{files}'")
+    # ext to filter
+    ext = expect_runner.get(CONFIG_EXPECT_RUNNER_EXTENSION, None)
+    ext = cobj.interpolate(phase=2, template=ext, context=f"test '{test_name}' expect runner extension interpolation '{ext}'")
+    # test files
+    test_files = _prepare_test_runner_dirs(cobj, test_name, files, ext)
+    if test_files is None or len(test_files) == 0:
+        error, stdout, stderr = _run_test_cmd(cobj, cmd)
+        if error:
+            raise CLIError(error)
+        return
+    test_return_error = []
+    for test_file in test_files:
+        if '<test_file>' in cmd:
+            cmd = [s_cmd.replace('<test_file>', test_file) for s_cmd in cmd]
+        else:
+            cmd = cmd + [test_file]
+        error, stdout, stderr = _run_test_cmd(cobj, cmd)
+        if error:
+            test_return_error.append({"error": error, "stdout": stdout, "stderr": stderr, "cmd": cmd})
+    if test_return_error:
+        raise CLIError(test_return_error)
+    return
+
+
+def _run_test_cmd(cobj, cmd):
+    env = {"PYTHONPATH": ":".join(sys.path)}
+    env["CDF_NAME"] = cobj.name
+    env["CDF_LOCATION"] = cobj.location
+    env["CDF_RESOURCE_GROUP"] = cobj.resource_group_name
+    # TODO output status from state or point to state ??
+    env["CDF_JSON_VARS"] = "TODO"
+    error, stdout, stderr = None, None, None
+    try:
+        stdout, stderr = run_command(cmd[0], cmd[1:], env=env)
+    except CLIError as err:
+        error = err
+    return error, stdout, stderr
+
+
+def _prepare_test_runner_dirs(cobj, test_name, files, ext_filter):
+    ''' Run  tests runner '''
+
+    if files is None:
+        return None
+    if isinstance(files, str):
+        files = [files]
+
+    test_files = []
+    for test_file in files:
+        test_file = cobj.interpolate(phase=2, template=test_file, context=f"test '{test_name}' expect runner file interpolation '{test_file}'")
+        test_file = os.path.realpath(test_file)
+        if file_exists(test_file):
+            # A file just add it
+            test_files.append(test_file)
+        elif dir_exists(test_file):
+            for glob_file in glob.glob(os.path.join(test_file, ext_filter)):
+                if file_exists(os.path.join(test_file, glob_file)):
+                    test_files.append(os.path.join(test_file, glob_file))
+    return test_files
 
 
 def _expect_assert_exec(cobj, test_name, expect_assert):
@@ -73,7 +141,7 @@ def _expect_assert_exec(cobj, test_name, expect_assert):
         elif isinstance(expect_assert, (str)):
             expect_assert = strtobool(expect_assert)
         else:
-            raise CLIError("Unknown boolean expression '{expect_assert}'")
+            raise CLIError(f"Unknown boolean expression '{expect_assert}'")
     except ValueError as error:
         raise CLIError from error
 

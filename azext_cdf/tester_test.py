@@ -8,8 +8,9 @@ import shutil
 import random
 import string
 from mock import patch
+from pathlib import Path
 from knack.util import CLIError
-from azext_cdf.tester import run_test, _manage_git_upgrade
+from azext_cdf.tester import run_test, _manage_git_upgrade, _prepare_test_runner_dirs
 from azext_cdf.parser import ConfigParser, CONFIG_STATE_FILEPATH
 from azext_cdf._supporter_test import assert_state
 from azext_cdf.utils import run_command
@@ -19,6 +20,10 @@ from azext_cdf.utils import run_command
 def assert_run_count(self, run_dict):
     for assert_key, assert_value in run_dict.items():
         self.assertEqual(assert_key.call_count, assert_value)
+
+class robj():
+    def interpolate(self, **cargs):
+        return cargs['template']
 
 class TesterNoUpgrade(unittest.TestCase):
     def setUp(self):
@@ -279,12 +284,59 @@ class TestManageGitUpgrade(unittest.TestCase):
 # upgrade choices=['all', 'fresh', 'upgrade'])
 # down choices=['success', 'always', 'never'])
 
+class TestRunner(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = os.path.realpath(tempfile.mkdtemp())
+        self.a_dir = os.path.join(self.tmpdir, "a")
+        self.empty_dir = os.path.join(self.a_dir, "a")
+        self.no_test_dir = os.path.join(self.a_dir, "b")
+        self.b_dir = os.path.join(self.tmpdir, "b")
+        self.b_a_dir = os.path.join(self.b_dir, "b")
+        self.dir_struct = { self.tmpdir: ["0.test"],
+                            self.empty_dir: [],
+                            self.no_test_dir: ["no.tr", "yes.asd"],
+                            self.a_dir:["1.test", "2.test", "3.txt", "4.py"],
+                            self.b_dir:["5.test", "6.test", "7.txt", "8.py"],
+                            self.b_a_dir:["9.test", "10.txt", "11.py"],
+                            }
+
+        for directory in self.dir_struct:
+            try:
+                os.makedirs(directory)
+            except OSError:
+                pass
+
+            for touch_file in self.dir_struct[directory]:
+                Path(os.path.join(directory, touch_file)).touch()
+        self.cobj = robj()
+        # def _prepare_test_runner_dirs(cobj, test_name, files, ext_filter):
+
+    def test_prepare_runner_none(self):
+        self.assertIsNone(_prepare_test_runner_dirs(self.cobj, "unittest", None, None))
+
+    def test_prepare_runner_empty_dir(self):
+        self.assertEqual(_prepare_test_runner_dirs(self.cobj, "unittest", self.empty_dir, "*"), [])
+    def test_prepare_runner_no_filters(self):
+        all_dirs = [os.path.join(self.a_dir, sf) for sf in self.dir_struct[self.a_dir]]
+        self.assertListEqual(sorted(_prepare_test_runner_dirs(self.cobj, "unittest", self.a_dir, "*")), sorted(all_dirs))
+    def test_prepare_runner_filtered(self):
+        all_files = [os.path.join(self.b_dir, "5.test"), os.path.join(self.b_dir, "6.test")]
+        self.assertListEqual(sorted(_prepare_test_runner_dirs(self.cobj, "unittest", self.b_dir, "*.test")), sorted(all_files))
+        # _prepare_test_runner_dirs
+    def test_prepare_runner_relative(self):
+        fqdn = [os.path.join(self.b_dir, "8.py")]
+        os.chdir(self.b_dir)
+        self.assertListEqual(_prepare_test_runner_dirs(self.cobj, "unittest", ".", "*.py"), fqdn)
+
+    def test_prepare_runner_empty_filter(self):
+        self.assertListEqual(sorted(_prepare_test_runner_dirs(self.cobj, "unittest", ".", "*.nonrow")), [])
+
 if __name__ == '__main__':
     unittest.main()
 
 
 # TODO Write tests for
 # _run_single_test
-# _expect_cmd_exec
+# _expect_runner_exec
 # _expect_assert_exec
 # _phase_cordinator
