@@ -17,7 +17,7 @@ tests:
     expect:
       up:
         fail: false
-        assert:
+        jassert:
           - "{{ result.outputs.hello.value == 'v2' }}"
   default_upgrade:
     description: "Default upgrade"
@@ -30,7 +30,9 @@ tests:
     expect:
       up:
         fail: false
-        assert:
+        jassert:
           - "{{ result.outputs.hello.value == 'v2' }}"
-        cmd:
-          - /bin/sh {{ cdf.config_dir }}/tests/default/resource_group.sh {{cdf.resource_group}}
+        runner:
+          cmd: /bin/sh {{ cdf.config_dir }}/tests/default/resource_group.sh {{cdf.resource_group}}
+          files:
+            - /asdasdas/sadasdasdad
