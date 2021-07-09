@@ -193,6 +193,7 @@ def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, s
     # print status to screen
     one_test_failed = False
     upgrade_failed = []
+    # pylint: disable=C0206
     for upgrade in results:
         for test_name in results[upgrade]:
             test = results[upgrade][test_name]
