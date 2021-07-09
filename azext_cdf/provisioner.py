@@ -280,13 +280,13 @@ def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group,
         output
     """
     # TODO only run terraform whatif if we have plan
-    _run_arm_what_if(cmd,
-                     deployment_name=deployment_name,
-                     arm_template_file=arm_template_file,
-                     resource_group=resource_group,
-                     params=params,
-                     no_prompt=False,
-                     complete_deployment=complete_deployment)
+    # _run_arm_what_if(cmd,
+    #                  deployment_name=deployment_name,
+    #                  arm_template_file=arm_template_file,
+    #                  resource_group=resource_group,
+    #                  params=params,
+    #                  no_prompt=False,
+    #                  complete_deployment=complete_deployment)
     parameters, mode = _prepare_arm_deployment(params, complete_deployment)
     deployment = deploy_arm_template_at_resource_group(
         cmd, resource_group_name=resource_group, template_file=arm_template_file, deployment_name=deployment_name, mode=mode, no_prompt=no_prompt, parameters=parameters, no_wait=False
