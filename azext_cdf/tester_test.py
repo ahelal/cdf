@@ -7,7 +7,7 @@ import os
 import shutil
 import random
 import string
-from mock import patch
+from unittest.mock import patch
 from pathlib import Path
 from knack.util import CLIError
 from azext_cdf.tester import run_test, _manage_git_upgrade, _prepare_test_runner_dirs

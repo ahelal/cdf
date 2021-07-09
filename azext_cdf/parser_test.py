@@ -5,7 +5,7 @@ import shutil
 import os
 import platform
 
-from mock import patch
+from unittest.mock import patch
 from knack.util import CLIError
 from azext_cdf.parser import ConfigParser
 from azext_cdf.version import VERSION
