@@ -14,7 +14,7 @@ import requests
 import yaml
 from knack.log import get_logger
 from knack.util import CLIError
-import azure.cli.core.commands.progress as progress
+from azure.cli.core.commands import progress
 from azext_cdf._def import CONFIG_STATE_FILEPATH
 # from azext_cdf.parser import ConfigParser
 
