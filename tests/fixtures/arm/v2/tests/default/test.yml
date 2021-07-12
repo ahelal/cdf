@@ -11,3 +11,6 @@ expect:
     fail: false
     jassert:
       - "{{ result.outputs.name.value == 'helloworld' }}"
+    plan:
+      create: 1
+      # delete: 2

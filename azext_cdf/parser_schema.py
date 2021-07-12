@@ -38,9 +38,9 @@ EXPECT_SCHEMA = {
     Optional(CONFIG_EXPECT_HOOK_ARGS): Or(str, list),
     # TODO expect other plan options for ARM
     Optional(CONFIG_EXPECT_PLAN, default={}): {
-        Optional(CONFIG_EXPECT_PLAN_ADD): Or(int, str),
-        Optional(CONFIG_EXPECT_PLAN_CHANGE): Or(int, str),
-        Optional(CONFIG_EXPECT_PLAN_DESTROY): Or(int, str),
+        Optional(CONFIG_EXPECT_PLAN_CREATE): Or(int, str),
+        Optional(CONFIG_EXPECT_PLAN_MODIFY): Or(int, str),
+        Optional(CONFIG_EXPECT_PLAN_DELETE): Or(int, str),
     },
     Optional(CONFIG_EXPECT_RUNNER, default={}): {
         Optional(CONFIG_EXPECT_RUNNER_CMD, default=None): Or(str, list),

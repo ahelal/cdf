@@ -41,7 +41,7 @@ def _empty_deployment(cmd, cobj):
             raise CLIError(error) from error
 
 
-def provision_rg_if_needed(cmd, cobj):
+def _provision_rg_if_needed(cmd, cobj):
     ''' Create resource group if needed '''
 
     if cobj.managed_resource and not _resource_group_exists(cmd, cobj.resource_group_name):
@@ -105,14 +105,20 @@ def _de_provision(cmd, cobj):
     cobj.state.set_result(outputs={}, resources={}, flush=True)
 
 
+def pre_provision(cmd, cobj):
+    ''' do pre provision runs'''
+
+    # Run template interpolate
+    cobj.interpolate_pre_up()
+    # Create RG if needed
+    _provision_rg_if_needed(cmd, cobj)
+
+
 def provision(cmd, cobj):
     ''' main provision function that handles lifecycle '''
 
     cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
-    # Run template interpolate
-    cobj.interpolate_pre_up()
-    # Create RG if needed
-    provision_rg_if_needed(cmd, cobj)
+    pre_provision(cmd, cobj)
     # Run pre up life cycle
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
     try:
@@ -259,15 +265,7 @@ def _run_terraform_plan(deployment_name, terraform_dir, tmp_dir, params=None, bi
     plan = {"create": 0, "delete": 0, "modify": 0, "nochange": 0}
     map_to_name = {"update": "modify", "delete": "delete", "no-op": "nochange", "create": "create"}
     for change in output.get("resource_changes", []):
-        # print("---| change", change)
         for change_type in change["change"]["actions"]:
-            # print("---", map_to_name[change_type])
-            # if change_type == "update":
-            #     change_type = "modify"
-            # elif change_type == "destroy":
-            #     change_type = "delete"
-            # elif change_type == "no-op":
-            #     change_type = "nochange"
             plan[map_to_name[change_type]] += 1
     return plan
 
@@ -279,14 +277,6 @@ def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group,
         output_resources
         output
     """
-    # TODO only run terraform whatif if we have plan
-    # _run_arm_what_if(cmd,
-    #                  deployment_name=deployment_name,
-    #                  arm_template_file=arm_template_file,
-    #                  resource_group=resource_group,
-    #                  params=params,
-    #                  no_prompt=False,
-    #                  complete_deployment=complete_deployment)
     parameters, mode = _prepare_arm_deployment(params, complete_deployment)
     deployment = deploy_arm_template_at_resource_group(
         cmd, resource_group_name=resource_group, template_file=arm_template_file, deployment_name=deployment_name, mode=mode, no_prompt=no_prompt, parameters=parameters, no_wait=False
@@ -296,8 +286,6 @@ def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group,
 
 def _run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, bin_path="terraform", no_prompt=False):
     ''' Run terraform apply '''
-    # TODO run terraform plan only if we have plan
-    _run_terraform_plan(deployment_name, terraform_dir, tmp_dir, params=params, bin_path="terraform", no_prompt=False)
     # TODO fix return
     _run_terraform_cmd(deployment_name, "apply", terraform_dir, tmp_dir, params=params, no_prompt=no_prompt)
     stdout, _ = run_command(bin_path, args=["output", f"-state={tmp_dir}/{deployment_name}.tfstate", "-json"], interactive=False, cwd=terraform_dir)

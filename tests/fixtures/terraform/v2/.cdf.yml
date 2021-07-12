@@ -34,5 +34,6 @@ tests:
           - "{{ result.outputs.hello.value == 'v2' }}"
         runner:
           cmd: /bin/sh {{ cdf.config_dir }}/tests/default/resource_group.sh {{cdf.resource_group}}
-          files:
-            - /asdasdas/sadasdasdad
+        plan:
+          create: 1
+          delete: 2
