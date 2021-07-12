@@ -58,12 +58,12 @@ def _expect_plan(cmd, cobj, test_name, expect_obj):
                                        no_prompt=False,
                                        complete_deployment=cobj.deployment_mode)
     elif cobj.provisioner == "terraform":
-        plan_actual =_run_terraform_plan(deployment_name,
-                                        find_the_right_dir(cobj.up_location, cobj.config_dir),
-                                        cobj.tmp_dir,
-                                        params=params,
-                                        bin_path="terraform",
-                                        no_prompt=False)
+        plan_actual = _run_terraform_plan(deployment_name,
+                                          find_the_right_dir(cobj.up_location, cobj.config_dir),
+                                          cobj.tmp_dir,
+                                          params=params,
+                                          bin_path="terraform",
+                                          no_prompt=False)
     result = _compare_plans(cobj, test_name, plan_actual, plan_expect)
     if result != {}:
         raise CLIError(f"plan mismatch {result}")
