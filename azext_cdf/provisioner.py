@@ -136,6 +136,7 @@ def provision(cmd, cobj):
 def _provision(cmd, cobj):
     ''' run the IaC logic for all provisioners '''
 
+    cobj.interpolate_params()
     output_resources, outputs = None, None
     if cobj.provisioner == "bicep":
         output_resources, outputs = _run_bicep(

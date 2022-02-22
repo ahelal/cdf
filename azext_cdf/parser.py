@@ -6,8 +6,10 @@ import yaml
 from schema import Schema, SchemaError, SchemaMissingKeyError, SchemaWrongKeyError
 
 from knack.util import CLIError
-from jinja2 import Environment, BaseLoader, StrictUndefined, Template, contextfunction  # pass_context
+# from jinja2 import Environment, BaseLoader, StrictUndefined, Template, contextfunction  # pass_context
+from jinja2 import Environment, BaseLoader, StrictUndefined  # pass_context
 from jinja2.exceptions import UndefinedError, TemplateSyntaxError, TemplateRuntimeError
+from azext_cdf._jinja2 import include_file, template_file, directory_exists, file_exists
 from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_create, dir_remove, real_dirname, random_string, convert_to_list_if_need, dir_change_working
 from azext_cdf.state import State
@@ -16,24 +18,24 @@ from azext_cdf.parser_schema import MAIN_SCHEMA
 from azext_cdf._def import *
 
 
-def _include_file(name):
-    try:
-        with open(name) as in_file:
-            return in_file.read()
-    except Exception as error:
-        raise CLIError(f"include_file filter argument '{name}' error. {str(error)}") from error
+# def _include_file(name):
+#     try:
+#         with open(name) as in_file:
+#             return in_file.read()
+#     except Exception as error:
+#         raise CLIError(f"include_file filter argument '{name}' error. {str(error)}") from error
 
 
-# @pass_context
-@contextfunction
-def _template_file(ctx, name):
-    try:
-        data = _include_file(name)
-        return Template(data, undefined=StrictUndefined).render(ctx)
+# # @pass_context
+# @contextfunction
+# def _template_file(ctx, name):
+#     try:
+#         data = _include_file(name)
+#         return Template(data, undefined=StrictUndefined).render(ctx)
 
-    except Exception as error:
-        raise CLIError(f"template_file filter argument '{name}' error. {str(error)}") from error
-    return data
+#     except Exception as error:
+#         raise CLIError(f"template_file filter argument '{name}' error. {str(error)}") from error
+#     return data
 
 
 class ConfigParser:
@@ -113,8 +115,10 @@ class ConfigParser:
 
     def _setup_jinja2(self):
         self.jinja_env = Environment(loader=BaseLoader, undefined=StrictUndefined)
-        self.jinja_env.globals["include_file"] = _include_file
-        self.jinja_env.globals["template_file"] = _template_file
+        self.jinja_env.globals["include_file"] = include_file
+        self.jinja_env.globals["template_file"] = template_file
+        self.jinja_env.globals["directory_exists"] = directory_exists
+        self.jinja_env.globals["file_exists"] = file_exists
         self.jinja_env.globals["random_string"] = random_string
 
     def _setup_load_file_references(self):
@@ -225,8 +229,12 @@ class ConfigParser:
 
     def interpolate_pre_up(self):
         ''' Interpolate variables before up '''
-
         self.interpolate_delayed_variable()
+
+
+    def interpolate_params(self):
+        ''' interpolate last params '''
+
         if CONFIG_PARAMS in self.config:
             self.config[CONFIG_PARAMS] = self.interpolate(FIRST_PHASE, self.config[CONFIG_PARAMS], context="pre up interpolation")
 
