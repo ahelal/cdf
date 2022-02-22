@@ -33,7 +33,9 @@ DEPENDENCIES = [
     "schema",
     "pyYaml",
     "Jinja2",
-    "semver"
+    "semver",
+    # "azspec @ file://~/workspace/cdf-project/azspec"
+    "azspec @ git+https://github.com/ahelal/azspec"
 ]
 
 setup(
@@ -47,6 +49,7 @@ setup(
     license='MIT',
     classifiers=CLASSIFIERS,
     packages=find_packages(),
+    include_package_data=True,
     install_requires=DEPENDENCIES,
     package_data={'azext_cdf': ['azext_metadata.json']},
 )

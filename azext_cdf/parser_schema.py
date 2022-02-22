@@ -35,8 +35,18 @@ HOOKS_SCHEMA = {
 EXPECT_SCHEMA = {
     Optional(CONFIG_EXPECT_FAIL, default=False): bool,
     Optional(CONFIG_EXPECT_ASSERT): Or(str, list),
-    Optional(CONFIG_EXPECT_CMD): Or(str, list),
-    Optional(CONFIG_EXPECT_ARGS): Or(str, list),
+    Optional(CONFIG_EXPECT_HOOK_ARGS): Or(str, list),
+    # TODO expect other plan options for ARM
+    Optional(CONFIG_EXPECT_PLAN, default={}): {
+        Optional(CONFIG_EXPECT_PLAN_CREATE): Or(int, str),
+        Optional(CONFIG_EXPECT_PLAN_MODIFY): Or(int, str),
+        Optional(CONFIG_EXPECT_PLAN_DELETE): Or(int, str),
+    },
+    Optional(CONFIG_EXPECT_RUNNER, default={}): {
+        Optional(CONFIG_EXPECT_RUNNER_CMD, default=None): Or(str, list),
+        Optional(CONFIG_EXPECT_RUNNER_FILES, default=None): Or(str, list, None),
+        Optional(CONFIG_EXPECT_RUNNER_EXTENSION, default="*"): str,
+    }
 }
 
 UPGRADE_SCHEMA = {
@@ -63,6 +73,7 @@ TEST_SCHEMA = {
         Optional(CONFIG_RG_MANAGED, default=True): bool,
         Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
         Optional(CONFIG_UP): And(str, len),
+        Optional(CONFIG_PROVISIONER_BINARY_PATH, default=""): str,
         Optional("upgrade_strategy", default="all"): And(str, lambda s: s in ("all", "fresh", "upgrade")),
         Optional(CONFIG_UPGRADE, default=[]): _list_or_tuple_of(UPGRADE_SCHEMA),
         # Optional('vars_file', default=[]): Or(str,list),
@@ -84,6 +95,7 @@ MAIN_SCHEMA = {
     Optional(CONFIG_PROVISIONER, default="bicep"): And(str, Use(str.lower), lambda s: s in CONFIG_SUPPORTED_PROVISIONERS),
     Optional(CONFIG_DEPLOYMENT_COMPLETE, default=False): bool,
     Optional(CONFIG_UP, default=""): str,
+    Optional(CONFIG_PROVISIONER_BINARY_PATH, default=""): str,
     Optional(CONFIG_TMP, default="{{cdf.config_dir}}/.cdf_tmp"): And(str, len),
     # Optional('vars_file', default=[]): Or(str,list),
     Optional(CONFIG_VARS, default={}): dict,

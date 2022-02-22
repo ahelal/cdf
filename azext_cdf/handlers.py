@@ -12,9 +12,9 @@ from azext_cdf.version import VERSION
 from azext_cdf.utils import dir_change_working, json_load, file_read_content, file_exists, convert_to_list_if_need
 from azext_cdf.utils import Progress, init_config
 from azext_cdf.hooks import run_hook
-from azext_cdf._def import STATE_PHASE_UP, STATE_STATUS_SUCCESS
+from azext_cdf._def import STATE_PHASE_UP, STATE_STATUS_SUCCESS, CONFIG_EXPECT_RUNNER_CMD, CONFIG_EXPECT_RUNNER_FILES, CONFIG_EXPECT_RUNNER_EXTENSION
 from azext_cdf.provisioner import de_provision, provision, check_deployment_error
-from azext_cdf.tester import run_test
+from azext_cdf.tester import run_test, expect_runner_exec
 from azext_cdf.parser import ConfigParser
 
 _LOGGER = get_logger(__name__)
@@ -98,6 +98,13 @@ def debug_interpolate_handler(cmd, config=CONFIG_DEFAULT, working_dir=None, phas
             return
         except CLIError as error:
             print(f"Error : {str(error)}")
+
+
+def debug_azspec_handler(cmd, test_bin, config=CONFIG_DEFAULT, working_dir=None, state_file=None, test_files=None, test_ext="*"):
+    ''' test azspec files '''
+
+    cobj, _ = init_config(config, ConfigParser, remove_tmp=False, working_dir=working_dir, state_file=state_file, state_locking=False)
+    expect_runner_exec(cobj, "clispec", {CONFIG_EXPECT_RUNNER_CMD: test_bin, CONFIG_EXPECT_RUNNER_EXTENSION: test_ext, CONFIG_EXPECT_RUNNER_FILES: test_files})
 
 
 def init_handler(cmd, config=CONFIG_DEFAULT, force=False, example=False, working_dir=None, state_file=None):
@@ -186,6 +193,7 @@ def test_handler(cmd, config=CONFIG_DEFAULT, test_args=None, working_dir=None, s
     # print status to screen
     one_test_failed = False
     upgrade_failed = []
+    # pylint: disable=C0206
     for upgrade in results:
         for test_name in results[upgrade]:
             test = results[upgrade][test_name]

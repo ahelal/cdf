@@ -18,8 +18,8 @@ def run_hook_lifecycle(cobj, event):
     Loop through defined hooks and run all hooks attached to event.
     Returns: None
     """
-    for hook_name in cobj.data[CONFIG_HOOKS]:
-        if is_equal_or_in(event, cobj.data[CONFIG_HOOKS][hook_name]["lifecycle"]):
+    for hook_name in cobj.config[CONFIG_HOOKS]:
+        if is_equal_or_in(event, cobj.config[CONFIG_HOOKS][hook_name]["lifecycle"]):
             _LOGGER.info("Hook event:%s triggered for hook:%s", event, hook_name)
             run_hook(cobj, [hook_name])
 
@@ -55,7 +55,7 @@ def _run_hook(cobj, hook_args, recursion_n=1, root_vars=None):
     _recursion_limit(recursion_n, hook_name)
 
     operation_num = 0
-    hook = cobj.data[CONFIG_HOOKS][hook_name]
+    hook = cobj.config[CONFIG_HOOKS][hook_name]
     _LOGGER.info("Running hook:%s, Args:%s", hook_name, hook_args)
     if not _evaluate_condition(cobj, hook_name, hook, root_vars):
         _LOGGER.debug("Condition for hook %s evaluted to false", hook_name)

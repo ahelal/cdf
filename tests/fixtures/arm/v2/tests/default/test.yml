@@ -9,5 +9,8 @@ upgrade_strategy: all
 expect:
   up:
     fail: false
-    assert:
+    jassert:
       - "{{ result.outputs.name.value == 'helloworld' }}"
+    plan:
+      create: 1
+      # delete: 2

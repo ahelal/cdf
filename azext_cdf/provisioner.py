@@ -5,7 +5,7 @@ import os
 from knack.util import CLIError
 from knack.log import get_logger
 from azure.cli.command_modules.resource.custom import get_deployment_at_resource_group
-from azure.cli.command_modules.resource.custom import build_bicep_file
+from azure.cli.command_modules.resource.custom import build_bicep_file, what_if_deploy_arm_template_at_resource_group
 from azure.cli.command_modules.resource.custom import deploy_arm_template_at_resource_group, create_resource_group, delete_resource, show_resource
 from azure.cli.core.commands.client_factory import get_subscription_id
 from azure.core.exceptions import ResourceNotFoundError
@@ -41,7 +41,7 @@ def _empty_deployment(cmd, cobj):
             raise CLIError(error) from error
 
 
-def provision_rg_if_needed(cmd, cobj):
+def _provision_rg_if_needed(cmd, cobj):
     ''' Create resource group if needed '''
 
     if cobj.managed_resource and not _resource_group_exists(cmd, cobj.resource_group_name):
@@ -94,24 +94,31 @@ def _de_provision(cmd, cobj):
         _empty_deployment(cmd, cobj)
     elif cobj.provisioner == "terraform":
         # Run template interpolate
-        run_terraform_destroy(
+        _run_terraform_destroy(
             deployment_name=cobj.name,
             terraform_dir=find_the_right_dir(cobj.up_location, cobj.config_dir),
             tmp_dir=cobj.tmp_dir,
-            params=cobj.data[CONFIG_PARAMS],
+            bin_path=cobj.provisioner_path,
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False
         )
     cobj.state.set_result(outputs={}, resources={}, flush=True)
+
+
+def pre_provision(cmd, cobj):
+    ''' do pre provision runs'''
+
+    # Run template interpolate
+    cobj.interpolate_pre_up()
+    # Create RG if needed
+    _provision_rg_if_needed(cmd, cobj)
 
 
 def provision(cmd, cobj):
     ''' main provision function that handles lifecycle '''
 
     cobj.state.transition_to_phase(STATE_PHASE_GOING_UP)
-    # Run template interpolate
-    cobj.interpolate_pre_up()
-    # Create RG if needed
-    provision_rg_if_needed(cmd, cobj)
+    pre_provision(cmd, cobj)
     # Run pre up life cycle
     run_hook_lifecycle(cobj, LIFECYCLE_PRE_UP)
     try:
@@ -129,40 +136,42 @@ def provision(cmd, cobj):
 def _provision(cmd, cobj):
     ''' run the IaC logic for all provisioners '''
 
+    cobj.interpolate_params()
     output_resources, outputs = None, None
     if cobj.provisioner == "bicep":
-        output_resources, outputs = run_bicep(
+        output_resources, outputs = _run_bicep(
             cmd,
             deployment_name=cobj.name,
             bicep_file=find_the_right_file(cobj.up_location, "bicep", "*.bicep", cobj.config_dir),
             tmp_dir=cobj.tmp_dir,
             resource_group=cobj.resource_group_name,
-            params=cobj.data[CONFIG_PARAMS],
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False,
             complete_deployment=cobj.deployment_mode,
         )
     elif cobj.provisioner == "arm":
-        output_resources, outputs = run_arm_deployment(
+        output_resources, outputs = _run_arm_deployment(
             cmd,
             deployment_name=cobj.name,
             arm_template_file=find_the_right_file(cobj.up_location, "arm", "*.json", cobj.config_dir),
             resource_group=cobj.resource_group_name,
-            params=cobj.data[CONFIG_PARAMS],
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False,
             complete_deployment=cobj.deployment_mode,
         )
     elif cobj.provisioner == "terraform":
-        output_resources, outputs = run_terraform_apply(
+        output_resources, outputs = _run_terraform_apply(
             deployment_name=cobj.name,
             terraform_dir=find_the_right_dir(cobj.up_location, cobj.config_dir),
             tmp_dir=cobj.tmp_dir,
-            params=cobj.data[CONFIG_PARAMS],
+            bin_path=cobj.provisioner_path,
+            params=cobj.config[CONFIG_PARAMS],
             no_prompt=False
         )
     cobj.state.set_result(outputs=outputs, resources=output_resources, flush=True)
 
 
-def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, params=None, no_prompt=False, complete_deployment=False):
+def _run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, params=None, no_prompt=False, complete_deployment=False):
     '''
     Deploy an bicep files
     Returns:
@@ -173,7 +182,7 @@ def run_bicep(cmd, deployment_name, bicep_file, tmp_dir, resource_group, params=
     _LOGGER.debug(" Building bicep file in tmp dir %s", arm_template_file)
     build_bicep_file(cmd, bicep_file, outfile=arm_template_file)
 
-    return run_arm_deployment(
+    return _run_arm_deployment(
         cmd,
         deployment_name=deployment_name,
         arm_template_file=arm_template_file,
@@ -198,14 +207,7 @@ def check_deployment_error(cmd, resource_group_name, deployment_name, deployment
     return deployment_status
 
 
-def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
-    """
-    Deploy an ARM template
-    Returns:
-        output_resources
-        output
-    """
-
+def _prepare_arm_deployment(params, complete_deployment):
     parameters = []
     for key, value in params.items():
         params_obj = [f"{key}={value}"]
@@ -215,18 +217,79 @@ def run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, 
         mode = "Complete"
     else:
         mode = "Incremental"
+    return parameters, mode
 
+
+def _run_arm_what_if(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
+    parameters, mode = _prepare_arm_deployment(params, complete_deployment)
+    wif = what_if_deploy_arm_template_at_resource_group(cmd=cmd,
+                                                        resource_group_name=resource_group,
+                                                        template_file=arm_template_file,
+                                                        deployment_name=deployment_name,
+                                                        mode=mode,
+                                                        no_prompt=no_prompt,
+                                                        no_pretty_print=True,
+                                                        parameters=parameters)
+    plan = {"create": 0, "delete": 0, "deploy": 0, "ignore": 0, "modify": 0, "nochange": 0, "unsupported": 0}
+    # wif.status == 'Succeeded'
+    # wif.error = None
+    # https://docs.microsoft.com/en-us/rest/api/resources/deployments/what-if
+
+    for change in wif.changes:
+        # TODO
+        # print("change", change)
+        plan[change.change_type.lower()] += 1
+        # if y.delta:
+        #     for x in y.delta:
+        #         print("-/+/~", x)
+        # print("______________________________")
+    return plan
+
+
+def _run_terraform_plan(deployment_name, terraform_dir, tmp_dir, params=None, bin_path="terraform", no_prompt=False):
+    # TODO
+    _run_terraform_cmd(deployment_name,
+                       "plan",
+                       terraform_dir,
+                       tmp_dir,
+                       params=params,
+                       bin_path=bin_path,
+                       auto_approve=False,
+                       no_prompt=no_prompt,
+                       extra_args=["-out", f"{tmp_dir}/{deployment_name}_plan.json"])
+    stdout, _ = run_command(bin_path, args=["show", "-json", f"{tmp_dir}/{deployment_name}_plan.json"], interactive=False, cwd=terraform_dir)
+    try:
+        output = json.loads(stdout)
+    # except subprocess.CalledProcessError as error:
+    except json.JSONDecodeError as error:
+        raise CLIError(f"Error while decoding json from terraform show. Error: {error}") from error
+    plan = {"create": 0, "delete": 0, "modify": 0, "nochange": 0}
+    map_to_name = {"update": "modify", "delete": "delete", "no-op": "nochange", "create": "create"}
+    for change in output.get("resource_changes", []):
+        for change_type in change["change"]["actions"]:
+            plan[map_to_name[change_type]] += 1
+    return plan
+
+
+def _run_arm_deployment(cmd, deployment_name, arm_template_file, resource_group, params=None, no_prompt=False, complete_deployment=False):
+    """
+    Deploy an ARM template
+    Returns:
+        output_resources
+        output
+    """
+    parameters, mode = _prepare_arm_deployment(params, complete_deployment)
     deployment = deploy_arm_template_at_resource_group(
         cmd, resource_group_name=resource_group, template_file=arm_template_file, deployment_name=deployment_name, mode=mode, no_prompt=no_prompt, parameters=parameters, no_wait=False
     )
     return deployment.result().as_dict().get("properties", {}).get("output_resources", {}), deployment.result().as_dict().get("properties", {}).get("outputs", {})
 
 
-def run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, no_prompt=False):
+def _run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, bin_path="terraform", no_prompt=False):
     ''' Run terraform apply '''
     # TODO fix return
     _run_terraform_cmd(deployment_name, "apply", terraform_dir, tmp_dir, params=params, no_prompt=no_prompt)
-    stdout, _ = run_command("terraform", args=["output", f"-state={tmp_dir}/{deployment_name}.tfstate", "-json"], interactive=False, cwd=terraform_dir)
+    stdout, _ = run_command(bin_path, args=["output", f"-state={tmp_dir}/{deployment_name}.tfstate", "-json"], interactive=False, cwd=terraform_dir)
     try:
         output = json.loads(stdout)
     # except subprocess.CalledProcessError as error:
@@ -235,19 +298,23 @@ def run_terraform_apply(deployment_name, terraform_dir, tmp_dir, params=None, no
     return {}, output
 
 
-def run_terraform_destroy(deployment_name, terraform_dir, tmp_dir, params=None, no_prompt=False):
+def _run_terraform_destroy(deployment_name, terraform_dir, tmp_dir, bin_path, params=None, no_prompt=False):
     ''' Run terraform destroy '''
-    return _run_terraform_cmd(deployment_name, "destroy", terraform_dir, tmp_dir, params=params, no_prompt=no_prompt)
+    return _run_terraform_cmd(deployment_name, "destroy", terraform_dir, tmp_dir, bin_path=bin_path, params=params, no_prompt=no_prompt)
 
 
-def _run_terraform_cmd(deployment_name, terraform_cmd, terraform_dir, tmp_dir, params=None, no_prompt=False):
+def _run_terraform_cmd(deployment_name, terraform_cmd, terraform_dir, tmp_dir, bin_path="terraform", params=None, no_prompt=False, auto_approve=True, extra_args=False):
     varsfile = os.path.join(tmp_dir, "terraformvars.json")
     if params:
         json_write_to_file(varsfile, params)
 
-    run_command("terraform", args=["init"], interactive=False, cwd=terraform_dir)
-    args = [terraform_cmd, f"-input={no_prompt}", f"-state={tmp_dir}/{deployment_name}.tfstate", "-auto-approve", "-no-color"]
+    run_command(bin_path, args=["init"], interactive=False, cwd=terraform_dir)
+    args = [terraform_cmd, f"-input={no_prompt}", f"-state={tmp_dir}/{deployment_name}.tfstate", "-no-color"]
+    if auto_approve:
+        args.append("-auto-approve")
     if params:
         args.append("-var-file")
         args.append(varsfile)
-    return run_command("terraform", args=args, interactive=False, cwd=terraform_dir)
+    if extra_args:
+        args += extra_args
+    return run_command(bin_path, args=args, interactive=False, cwd=terraform_dir)

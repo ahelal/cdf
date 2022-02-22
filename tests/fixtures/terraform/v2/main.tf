@@ -8,8 +8,16 @@ resource "azurerm_ssh_public_key" "ssh" {
   resource_group_name = var.resource_group
   location            = var.location
   public_key          = var.key
-  tags                = var.tags
+   tags                = var.tags 
 }
+/* 
+resource "azurerm_ssh_public_key" "ssh2" {
+  name                = "varname"
+  resource_group_name = var.resource_group
+  location            = var.location
+  public_key          = var.key
+  tags                = vasr.tags 
+} */
 
 output "hello" {
   value = "v2"

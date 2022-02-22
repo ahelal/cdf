@@ -1,17 +1,19 @@
 """ Tester  file """
 
 import os
-import shlex
+import glob
 import base64
+import sys
 from distutils.util import strtobool
 from knack.util import CLIError
 from knack.log import get_logger
-from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg, dir_exists
+from azext_cdf.utils import convert_to_list_if_need, convert_to_shlex_arg, dir_exists, file_exists, find_the_right_file, find_the_right_dir
 from azext_cdf.parser import ConfigParser
 from azext_cdf._def import LIFECYCLE_PRE_TEST, LIFECYCLE_POST_TEST, STATE_PHASE_TESTED, STATE_PHASE_TESTING, CONFIG_NAME
-from azext_cdf._def import CONFIG_TYPE, CONFIG_STATE_FILEPATH
+from azext_cdf._def import CONFIG_TYPE, CONFIG_STATE_FILEPATH, CONFIG_EXPECT_RUNNER, CONFIG_EXPECT_RUNNER_CMD, CONFIG_EXPECT_RUNNER_FILES, CONFIG_EXPECT_RUNNER_EXTENSION
+from azext_cdf._def import CONFIG_PARAMS, CONFIG_EXPECT_HOOK_ARGS, CONFIG_EXPECT_ASSERT, CONFIG_EXPECT_PLAN
 from azext_cdf.hooks import run_hook_lifecycle
-from azext_cdf.provisioner import de_provision, provision, run_command
+from azext_cdf.provisioner import de_provision, provision, run_command, _run_arm_what_if, _run_terraform_plan, pre_provision
 from azext_cdf.hooks import run_hook
 
 _LOGGER = get_logger(__name__)
@@ -23,7 +25,7 @@ def _print_x(message):
 
 def _run_hook(_, cobj, __, expect_hook):
     hook_name = expect_hook.get("hook")
-    hook_args = expect_hook.get("args", [])
+    hook_args = expect_hook.get(CONFIG_EXPECT_HOOK_ARGS, [])
     hook_args = convert_to_shlex_arg(hook_args)
     hook_args = [hook_name] + hook_args
     return run_hook(cobj, hook_args)
@@ -37,17 +39,64 @@ def _run_de_provision(cmd, cobj, _, __):
     return de_provision(cmd, cobj)
 
 
+def _expect_plan(cmd, cobj, test_name, expect_obj):
+    # todo check if
+    plan_expect = expect_obj.get(CONFIG_EXPECT_PLAN)
+    if plan_expect == {}:
+        # print("skipping no plan")
+        return False
+    plan_actual = {}
+    pre_provision(cmd, cobj)
+    deployment_name = cobj.name
+    params = cobj.config[CONFIG_PARAMS]
+    if cobj.provisioner == "bicep" or cobj.provisioner == "arm":
+        plan_actual = _run_arm_what_if(cmd,
+                                       deployment_name=deployment_name,
+                                       arm_template_file=find_the_right_file(cobj.up_location, "arm", "*.json", cobj.config_dir),
+                                       resource_group=cobj.resource_group_name,
+                                       params=params,
+                                       no_prompt=False,
+                                       complete_deployment=cobj.deployment_mode)
+    elif cobj.provisioner == "terraform":
+        plan_actual = _run_terraform_plan(deployment_name,
+                                          find_the_right_dir(cobj.up_location, cobj.config_dir),
+                                          cobj.tmp_dir,
+                                          params=params,
+                                          bin_path="terraform",
+                                          no_prompt=False)
+    result = _compare_plans(cobj, test_name, plan_actual, plan_expect)
+    if result != {}:
+        raise CLIError(f"plan mismatch {result}")
+    return False
+
+
+def _compare_plans(cobj, test_name, plan_actual, plan_expect):
+    diff = {}
+    # print("plan_actual", plan_actual)
+    # print("plan_expect", plan_expect)
+    for expect_plan_name, expect_plan_value in plan_expect.items():
+        actual_plan_value = plan_actual.get(expect_plan_name, None)
+        if actual_plan_value is None:
+            pass
+        elif isinstance(expect_plan_value, int) and actual_plan_value != expect_plan_value:
+            diff[expect_plan_name] = {"expected": expect_plan_value, "actual": actual_plan_value}
+        elif isinstance(expect_plan_value, str):
+            expr_result = cobj.interpolate(phase=2, template=expect_plan_value, context=f"test '{test_name}' plan interpolation for '{expect_plan_name}'", extra_vars={"_plan": actual_plan_value})
+            if not strtobool(expr_result):
+                diff[expect_plan_name] = {"expected_expression": expect_plan_value, "actual": actual_plan_value}
+    return diff
+
+
 def _run_expect_tests(_, cobj, test_name, expect_obj):
     errors = []
-    # run commands
-    expect_cmds = expect_obj.get("cmd")
-    for expect_cmd in convert_to_list_if_need(expect_cmds):
-        try:
-            _expect_cmd_exec(cobj, test_name, expect_cmd)
-        except CLIError as error:
-            errors.append(f"expect cmd failed '{expect_cmd}'. Error: '{error}'")
+    # run runner
+    expect_runner = expect_obj.get(CONFIG_EXPECT_RUNNER)
+    try:
+        expect_runner_exec(cobj, test_name, expect_runner)
+    except CLIError as error:
+        errors.append(f"expect runner failed '{expect_runner}'. Error: '{error}'")
     # run asserts
-    asserts = expect_obj.get("assert")
+    asserts = expect_obj.get(CONFIG_EXPECT_ASSERT)
     for expect_assert in convert_to_list_if_need(asserts):
         try:
             _expect_assert_exec(cobj, test_name, expect_assert)
@@ -57,11 +106,79 @@ def _run_expect_tests(_, cobj, test_name, expect_obj):
         raise CLIError(errors)
 
 
-def _expect_cmd_exec(cobj, test_name, expect_cmd):
+def expect_runner_exec(cobj, test_name, expect_runner):
+    ''' main expect runner function'''
+
+    if expect_runner is None:
+        return
     cobj.interpolate_delayed_variable()
-    expect_cmds_interpolated = cobj.interpolate(phase=2, template=expect_cmd, context=f"test '{test_name}' cmd interpolation '{expect_cmd}'")
-    expect_cmds_interpolated = shlex.split(expect_cmds_interpolated)
-    return run_command(expect_cmds_interpolated[0], expect_cmds_interpolated[1:], interactive=False)
+    cmd = expect_runner.get(CONFIG_EXPECT_RUNNER_CMD, None)
+    if cmd is None:
+        return
+    cmd = cobj.interpolate(phase=2, template=cmd, context=f"test '{test_name}' expect runner cmd interpolation '{cmd}'")
+    cmd = convert_to_shlex_arg(cmd)
+    # files
+    files = expect_runner.get(CONFIG_EXPECT_RUNNER_FILES, None)
+    files = cobj.interpolate(phase=2, template=files, context=f"test '{test_name}' expect runner files interpolation '{files}'")
+    # ext to filter
+    ext = expect_runner.get(CONFIG_EXPECT_RUNNER_EXTENSION, None)
+    ext = cobj.interpolate(phase=2, template=ext, context=f"test '{test_name}' expect runner extension interpolation '{ext}'")
+    # test files
+    test_files = _prepare_test_runner_dirs(cobj, test_name, files, ext)
+    if test_files is None or len(test_files) == 0:
+        error, stdout, stderr = _run_test_cmd(cobj, cmd)
+        if error:
+            raise CLIError(error)
+        return
+    test_return_error = []
+    for test_file in test_files:
+        if '<test_file>' in cmd:
+            cmd = [s_cmd.replace('<test_file>', test_file) for s_cmd in cmd]
+        else:
+            cmd = cmd + [test_file]
+        error, stdout, stderr = _run_test_cmd(cobj, cmd)
+        if error:
+            test_return_error.append({"error": error, "stdout": stdout, "stderr": stderr, "cmd": cmd})
+    if test_return_error:
+        raise CLIError(test_return_error)
+    return
+
+
+def _run_test_cmd(cobj, cmd):
+    env = {"PYTHONPATH": ":".join(sys.path)}
+    env["CDF_NAME"] = cobj.name
+    env["CDF_LOCATION"] = cobj.location
+    env["CDF_RESOURCE_GROUP"] = cobj.resource_group_name
+    # TODO output status from state or point to state ??
+    env["CDF_JSON_VARS"] = "TODO"
+    error, stdout, stderr = None, None, None
+    try:
+        stdout, stderr = run_command(cmd[0], cmd[1:], env=env)
+    except CLIError as err:
+        error = err
+    return error, stdout, stderr
+
+
+def _prepare_test_runner_dirs(cobj, test_name, files, ext_filter):
+    ''' Run  tests runner '''
+
+    if files is None:
+        return None
+    if isinstance(files, str):
+        files = [files]
+
+    test_files = []
+    for test_file in files:
+        test_file = cobj.interpolate(phase=2, template=test_file, context=f"test '{test_name}' expect runner file interpolation '{test_file}'")
+        test_file = os.path.realpath(test_file)
+        if file_exists(test_file):
+            # A file just add it
+            test_files.append(test_file)
+        elif dir_exists(test_file):
+            for glob_file in glob.glob(os.path.join(test_file, ext_filter)):
+                if file_exists(os.path.join(test_file, glob_file)):
+                    test_files.append(os.path.join(test_file, glob_file))
+    return test_files
 
 
 def _expect_assert_exec(cobj, test_name, expect_assert):
@@ -73,7 +190,7 @@ def _expect_assert_exec(cobj, test_name, expect_assert):
         elif isinstance(expect_assert, (str)):
             expect_assert = strtobool(expect_assert)
         else:
-            raise CLIError("Unknown boolean expression '{expect_assert}'")
+            raise CLIError(f"Unknown boolean expression '{expect_assert}'")
     except ValueError as error:
         raise CLIError from error
 
@@ -127,6 +244,12 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
     # Run pre test life cycle
     run_hook_lifecycle(test_cobj, LIFECYCLE_PRE_TEST)
 
+    # ** Run whatif/plan **
+    expect_obj = test_cobj.get_test(test_name, expect="up")
+    _phase_cordinator(cmd, test_cobj, _expect_plan, "plan", expect_obj, result, test_name=test_name, exit_on_error=exit_on_error, down_strategy=down_strategy, fail=False)
+    if result["failed"]:
+        return
+
     # ** UP and UP expect**
     expect_obj = test_cobj.get_test(test_name, expect="up")
     up_object = [{CONFIG_NAME: "provisioning", "fail_override": expect_obj.get("fail", False), "func": _run_provision},
@@ -164,7 +287,7 @@ def _run_single_test(cmd, test_cobj, result, test_name, exit_on_error, down_stra
 # git fetch tags --all
 # git show HEAD~3 --pretty=format:"%H" --quiet
 # git --no-pager tag --sort=-creatordate
-#  git rev-list -n 1 $TAG
+# git rev-list -n 1 $TAG
 def _run_git(args=None, cwd=None):
     return run_command("git", args=args, interactive=False, cwd=cwd)[0]
 

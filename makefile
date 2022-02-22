@@ -7,7 +7,7 @@ EXTENTION_NAME := cdf
 
 source-venv: $(VENV)/bin/activate
 test: test-lint test-unit test-integration
-test-integration: test-integration-code test-integration-bicep test-integration-terraform test-integration-arm
+test-integration: test-integration-code
 
 venv:
 	python3 -m venv $(VENV)
@@ -47,27 +47,9 @@ test-unit:
 	pytest -v azext_cdf --color=yes --code-highlight=yes
 
 test-integration-code:
-	pytest -v tests --color=yes --code-highlight=yes -s
-
-test-integration-arm:
-	@echo "running expect default test"
-	az cdf up -w ./tests/fixtures/arm/v2 
-	az cdf status -w ./tests/fixtures/arm/v2 
-	az cdf hook -w ./tests/fixtures/arm/v2 pass
-	az cdf down -y -w ./tests/fixtures/arm/v2
-	az cdf test -w ./tests/fixtures/arm/v2
-
-test-integration-bicep:
-	@echo "running expect default test"
-	az cdf test -w ./tests/fixtures/bicep/v2 --down-strategy=always default
-# also use cd instead of -w 
-	@echo "running expect expect_to_fail_and_fails test"
-	@cd ./tests/fixtures/bicep/v2 && az cdf test expect_to_fail_and_fails
-
-test-integration-terraform:
-	@echo "running expect terraform test"
-	az cdf test -w ./tests/fixtures/terraform/v2/ --down-strategy=always
-
+	pytest -v tests/integration/detailed_fixture_test.py --color=yes --code-highlight=yes -s
+	pytest -v tests/integration/integration_test.py --color=yes --code-highlight=yes -s
+	
 test-clean:
 	find . -type d -iname foo -delete
 
